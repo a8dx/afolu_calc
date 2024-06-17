@@ -55,7 +55,7 @@ library(parallel)
 library(future.apply)
 library(rstudioapi)
 # it be good to track the specific versions of these library you're using, 
-# either manually in the readme or using something like ren if you're familiar 
+# either manually in the readme or using something like renv if you're familiar 
 # I couldn't run this at first because I didn't see the plyr dependency for instance
 
 
@@ -80,31 +80,22 @@ library(rstudioapi)
             j <- jsonlite::fromJSON('croplandex.json', flatten=TRUE)
             interv_sub<- j$intervention_subcategory #intervention type
             common<-as.data.frame(j$scenarios$common)
-            
             bau<-as.data.frame(j$scenarios$business_as_usual)
             bau<-bau[,!names(bau)=="aoi_subregions"]
-            
             bau_aoi<-as.data.frame(j$scenarios$business_as_usual$aoi_subregions)
             bau<-rbind(bau,bau)
             bau<-cbind(bau,bau_aoi)
-            
             bau$scenario<-"business-as-usual"
-            
             int<-as.data.frame(j$scenarios$intervention)
             int<-int[,!names(int)=="aoi_subregions"]
             int_aoi<-as.data.frame(j$scenarios$intervention$aoi_subregions)
             int<-rbind(int,int)
             int<-cbind(int,int_aoi)
             int$scenario<-"intervention"
-            
             df<-rbind(bau,int)
-            
             common<-rbind(common,common,common,common)
-            
             df<-cbind(common,df)
-            
             df <- df %>% dplyr::mutate_at(-c(13:15,29:31,34,39,40,53), as.numeric)
-            
             names(df)[names(df)=="SOC_type"]<-"soil_class"
             head(df)
             #add aoi ids
