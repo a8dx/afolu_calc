@@ -47,19 +47,36 @@
     #    the intervention on both a per hectare and total area basis for each subAOI
 
 #### Read in Inputs ####
-    # Libraries
-        library(jsonlite)
-        library(tidyverse)
-        library(parallel)
-        library(future.apply)
+
+# Libraries
+library(jsonlite)
+library(tidyverse)
+library(parallel)
+library(future.apply)
+library(rstudioapi)
+# it be good to track the specific versions of these library you're using, 
+# either manually in the readme or using something like renv if you're familiar 
+# I couldn't run this at first because I didn't see the plyr dependency for instance
+
+
     # Extract data from json input
-        setwd("C:/Users/lme38/Dropbox/Soil Simplified/Ecodit")
+        #trying to still set the working directory but more generically, do you think this is okay
+        current_path = rstudioapi::getActiveDocumentContext()$path 
+        setwd(dirname(current_path ))
         #GEE output
+        
+            # I don't think you should need this file, because this information 
+            # is already in croplandex.json in the aoi_subregions. 
+            # The other input file you're getting according to  
+            # https://mathematicampr.atlassian.net/wiki/spaces/AFOLU/pages/3212444049/Code+requirements
+            # is land cover information which isn't in croplandex.json 
             gee<-jsonlite::fromJSON('gee_ex.json',flatten=TRUE)
             geedf<-as.data.frame(gee)
             colnames(geedf)<-names(gee$aoi_subregions)
             geedf$aoi_id<-c(1:nrow(geedf))
-        #Intervention parameters
+            
+            
+            #Intervention parameters
             j <- jsonlite::fromJSON('croplandex.json', flatten=TRUE)
             interv_sub<- j$intervention_subcategory #intervention type
             common<-as.data.frame(j$scenarios$common)
@@ -101,6 +118,11 @@
             df<-df[,-grep("uncertainty|error",names(df))]
       #Parameters
             AOIs<-unique(df$aoi_id)
+            
+            
+            # it be good to make paramateters like this that we might theoretically want to change 
+            # more obvious, maybe bringing them to the top of the file? 
+            # Just to distinquish them from the methodology driven numbers. 
             nx=500 #Number of Monte Carlo iterations
           
 ####GHG Calculations####
@@ -185,6 +207,13 @@
       resdf<-resdf %>%
         group_by(AOI) %>%
         nest_legacy(.key = "Var")
-      json_output<-jsonlite::toJSON(resdf)
-      write(json_output, paste0(interv_sub,".json"))
+      
+      # this doesn't seem technically consistent with 
+      # https://mathematicampr.atlassian.net/wiki/spaces/AFOLU/pages/3212444049/Code+requirements#Expected-output
+      # but that might be alright if it's cool with Jenny? 
+      # We need an agreed upon output format for your code though to give to the app team 
+      # so we should update this or the confluence so they're consistent
+      
+      json_output<-jsonlite::toJSON(resdf, pretty=TRUE)
+      write(json_output, paste0("output/",interv_sub,".json"))
       
