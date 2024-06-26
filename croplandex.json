@@ -60,7 +60,7 @@
               "FI_error_negative":"0",
               "FI_error_positive":"0",
               "ef_ch4":"0",
-              "vs":"0"
+              "Nex":"0"
           },
           {"climate_zone_category":"cool_temperate_dry",
           "soil_zone_category_gee":"mollisl",
@@ -87,7 +87,7 @@
               "FI_error_negative":"0",
               "FI_error_positive":"0",
               "ef_ch4":"0",
-              "vs":"0"
+              "Nex":"0"
           }
           ]
         }
@@ -130,7 +130,7 @@
               "FI_error_negative":"0",
               "FI_error_positive":"0",
               "ef_ch4":"58",
-              "vs":"7.6"
+              "Nex":"0.47"
           },
           {"climate_zone_category":"cool_temperate_dry",
           "soil_zone_category_gee":"mollisl",
@@ -157,7 +157,7 @@
               "FI_error_negative":"0",
               "FI_error_positive":"0",
               "ef_ch4":"58",
-              "vs":"7.6"
+              "Nex":"0.47"
           }
           ]
         }
