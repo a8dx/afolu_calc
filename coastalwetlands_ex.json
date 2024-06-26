@@ -1,0 +1,122 @@
+{
+  "intervention_type": "coastal wetlands",
+  "veg_type": "mangrove",
+  "intervention_sub.bau": "soil excavation and vegetation clearing",
+  "intervention_sub.int": "mangrove wood harvest",
+  "scenarios":{
+    "common": [{
+        "cf":"45.1",
+        "cf_uncertainty_low":"42.9",
+        "cf_uncertainty_high":"47.1",
+        "d":"0.71",
+        "d_uncertainty_low":"0.64",
+        "d_uncertainty_high":"0.74",
+        "dom_wood":"10.7",
+        "dom_wood_uncertainty_low":"6.5",
+        "dom_wood_uncertainty_high":"14.8",
+        "dom_litter":"0.7",
+        "dom_litter_uncertainty_low":"0",
+        "dom_litter_uncertainty_high":"1.3",
+	"EFre":"-1.62",
+	"EFre_uncertainty_low":"1.3",
+	"EFre_uncertainty_high":"2",
+	"EFdr":"7.9",
+	"EFdr_uncertainty_low":"5.2",
+	"EFdr_uncertainty_high":"11.8",
+	"EFf":"0.00169",
+	"EFf_uncertainty_low":"0",
+	"EFf_uncertainty_high":"0.0038",
+	"EFrewet":"193.7",
+	"EFrewet_uncertainty_low":"99.8",
+	"EFrewet_uncertainty_high":"358"
+    }
+],
+    "business_as_usual": [{
+        "bio_rem_vol": "0",
+	"fish_production": "0",
+        "aoi_subregions": [
+          {"climate_zone_category":"warm_temperate_dry",
+          "soil_zone_category_gee":"mollisl",
+            "cover_type":"trees",
+              "area": "5",
+              "SOC_type": "7",
+              "ag_rate": "18.1",
+              "ag_rate_uncertainty_low": "17.1",
+	      "ag_rate_uncertainty_high": "19.1",
+              "r": "0.96",
+              "r_uncertainty_low": "0.91",
+	      "r_uncertainty_high": "1.0",
+              "ag_biomass": "75",
+              "ag_biomass_uncertainty_low": "66",
+	      "ag_biomass_uncertainty_high": "84",
+              "SObefore": "286",
+              "SObefore_uncertainty_low": "247",
+	      "SObefore_uncertainty_high": "330"
+          },
+          {"climate_zone_category":"cool_temperate_dry",
+          "soil_zone_category_gee":"mollisl",
+            "cover_type":"trees",
+              "area": "10",
+              "SOC_type": "10",
+              "ag_rate": "18.1",
+              "ag_rate_uncertainty_low": "17.1",
+	      "ag_rate_uncertainty_high": "19.1",
+              "r": "0.96",
+              "r_uncertainty_low": "0.91",
+	      "r_uncertainty_high": "1.0",
+              "ag_biomass": "75",
+              "ag_biomass_uncertainty_low": "66",
+	      "ag_biomass_uncertainty_high": "84",
+              "SObefore": "286",
+              "SObefore_uncertainty_low": "247",
+	      "SObefore_uncertainty_high": "330"
+          }
+          ]
+        }
+],
+        "intervention":[
+{
+        "bio_rem_vol": "2.5",
+	"fish_production": "0",
+        "aoi_subregions": [
+          {"climate_zone_category":"warm_temperate_dry",
+          "soil_zone_category_gee":"mollisl",
+            "cover_type":"trees",
+              "area": "5",
+              "SOC_type": "7",
+              "ag_rate": "18.1",
+              "ag_rate_uncertainty_low": "17.1",
+	      "ag_rate_uncertainty_high": "19.1",
+              "r": "0.96",
+              "r_uncertainty_low": "0.91",
+	      "r_uncertainty_high": "1.0",
+              "ag_biomass": "75",
+              "ag_biomass_uncertainty_low": "66",
+	      "ag_biomass_uncertainty_high": "84",
+              "SObefore": "286",
+              "SObefore_uncertainty_low": "247",
+	      "SObefore_uncertainty_high": "330"
+          },
+          {"climate_zone_category":"cool_temperate_dry",
+          "soil_zone_category_gee":"mollisl",
+            "cover_type":"trees",
+              "area": "10",
+              "SOC_type": "10",
+              "ag_rate": "18.1",
+              "ag_rate_uncertainty_low": "17.1",
+	      "ag_rate_uncertainty_high": "19.1",
+              "r": "0.96",
+              "r_uncertainty_low": "0.91",
+	      "r_uncertainty_high": "1.0",
+              "ag_biomass": "75",
+              "ag_biomass_uncertainty_low": "66",
+	      "ag_biomass_uncertainty_high": "84",
+              "SObefore": "286",
+              "SObefore_uncertainty_low": "247",
+	      "SObefore_uncertainty_high": "330"
+          }
+          ]
+        }
+]
+}
+}
