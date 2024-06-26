@@ -268,18 +268,18 @@
         for(r in c(1:nrow(resdf))){
           aoi_tib <-tibble(
             AOI = paste0("Sub_AOI-",r),
-            CO2_thayr = list(rep(resdf[1,2],20)),
-            sdCO2ha = list(rep(resdf[1,5],20)),
-            CO2_tyr = list(rep(resdf[1,8],20)),
-            sdCO2 = list(rep(resdf[1,11],20)),
-            N2O_thayr = list(rep(resdf[1,3],20)),
-            sdN2Oha = list(rep(resdf[1,6],20)),
-            N2O_tyr = list(rep(resdf[1,9],20)),
-            sdN2O = list(rep(resdf[1,12],20)),
-            CH4_thayr = list(rep(resdf[1,4],20)),
-            sdCH4ha  = list(rep(resdf[1,7],20)),
-            CH4_tyr = list(rep(resdf[1,10],20)),
-            sdCH4  = list(rep(resdf[1,13],20))
+            CO2_thayr = list(rep(resdf[r,2],20)),
+            sdCO2ha = list(rep(resdf[r,5],20)),
+            CO2_tyr = list(rep(resdf[r,8],20)),
+            sdCO2 = list(rep(resdf[r,11],20)),
+            N2O_thayr = list(rep(resdf[r,3],20)),
+            sdN2Oha = list(rep(resdf[r,6],20)),
+            N2O_tyr = list(rep(resdf[r,9],20)),
+            sdN2O = list(rep(resdf[r,12],20)),
+            CH4_thayr = list(rep(resdf[r,4],20)),
+            sdCH4ha  = list(rep(resdf[r,7],20)),
+            CH4_tyr = list(rep(resdf[r,10],20)),
+            sdCH4  = list(rep(resdf[r,13],20))
           )
           restib<-rbind(restib,aoi_tib)
         }
