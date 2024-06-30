@@ -33,7 +33,7 @@
     #       -Burn timing (early or mid to late dry season)
 
 #### Parameters and Paths ####
-  # Calculations requires the following parameters and their associated uncertainty:
+  # Calculations require the following parameters and their associated uncertainty:
       #SOC
           # SOCREF: Reference soil stock for the climate zone and soil type (t C/ha)
           # FLU: Land use emissions factor (always 1 for grasslands)
@@ -246,7 +246,7 @@
             #emissions from enteric fermentation (if livestock incorporation)
             if(grepl("change in livestock type or stocking rate", interv_sub)){
               EF_CH4<-rnorm(1, temp_int$ef_ch4, 
-                            temp_int$ef_ch4*.50) #In Section 10.3.4 IPCC (2006), uncertainty range is 30-50% for livestock parameters
+                            temp_int$ef_ch4*.50/2) #In Section 10.3.4 IPCC (2006), uncertainty range (2 sd) is 30-50% for livestock parameters
               CH4_live<-(temp_int$stocking_rate-temp_bau$stocking_rate)*EF_CH4/1000
             } else{ CH4_live<-0 }
             results.unc[m,c(25:44)]<-CH4_live
@@ -317,7 +317,7 @@
             sdCO2ha = list(rep(resdf[r,43],20)),
             CO2_tyr = list(rep(resdf[r,84],20)),
             sdCO2 = list(rep(resdf[r,125],20)),
-            N2O_thayr = list(unname(unlist(resdf[r,c(3:23)]))),
+            N2O_thayr = list(unname(unlist(resdf[r,c(3:22)]))),
             sdN2Oha = list(unname(unlist(resdf[r,c(44:63)]))),
             N2O_tyr = list(unname(unlist(resdf[r,c(85:104)]))),
             sdN2O = list(unname(unlist(resdf[r,c(126:145)]))),
