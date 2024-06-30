@@ -169,7 +169,7 @@
             FIint<-rnorm(1, temp_int$FI, temp_int$FI_sd)
             SOCbau<-SOCREF*FLUbau*FMGbau*FIbau
             SOCint<-SOCREF*FLUint*FMGint*FIint
-            dSOC<-SOCbau-SOCint
+            dSOC<-(SOCbau-SOCint)/20
             results.unc[m,4]<-dSOC*44/12
         ####N2O emissions####
             #Calculate change in N sources
