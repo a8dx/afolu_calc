@@ -299,14 +299,14 @@
             sdCO2ha = list(c(resdf[r,6],rep(resdf[r,7],19))),
             CO2_tyr = list(c(resdf[r,10],rep(resdf[r,11],19))),
             sdCO2 = list(c(resdf[r,14],rep(resdf[r,15],19))),
-            N2O_thayr = list(rep(resdf[1,4],20)),
-            sdN2Oha = list(rep(resdf[1,8],20)),
-            N2O_tyr = list(rep(resdf[1,12],20)),
-            sdN2O = list(rep(resdf[1,16],20)),
-            CH4_thayr = list(rep(resdf[1,5],20)),
-            sdCH4ha  = list(rep(resdf[1,9],20)),
-            CH4_tyr = list(rep(resdf[1,14],20)),
-            sdCH4  = list(rep(resdf[1,17],20))
+            N2O_thayr = list(rep(resdf[r,4],20)),
+            sdN2Oha = list(rep(resdf[r,8],20)),
+            N2O_tyr = list(rep(resdf[r,12],20)),
+            sdN2O = list(rep(resdf[r,16],20)),
+            CH4_thayr = list(rep(resdf[r,5],20)),
+            sdCH4ha  = list(rep(resdf[r,9],20)),
+            CH4_tyr = list(rep(resdf[r,14],20)),
+            sdCH4  = list(rep(resdf[r,17],20))
           )
           restib<-rbind(restib,aoi_tib)
         }
