@@ -260,7 +260,7 @@
                     fire_n2o_ef<-rnorm(1,temp_g$burning_n2o_ef_mean,temp_g$burning_n2o_ef_sd)
                     if(temp_c$conv_burning=="yes" && interv_sub=="cropland to grassland"){
                         CF_c<-rnorm(1,temp_c$combustion_factor_mean,
-                                    temp_c$combustion_factor_mean*.4) #uncertainty value for ag. residues is not included in table,  assumed 40% uncertainty
+                                    temp_c$combustion_factor_mean*.4/1.96) #uncertainty value for ag. residues is not included in table,  assumed 40% uncertainty
                         MB_c<-BioCrop/Cf_herbaceous
                         fireN2O_c<-MB_c*CF_c*fire_n2o_ef/1000
                     }
