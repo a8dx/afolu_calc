@@ -138,7 +138,7 @@
             df$ef_prp_sd=(df$ef_prp_uncertainty_high-df$ef_prp_uncertainty_low)/3.92
             df$ef_vol_sd=(df$ef_vol_uncertainty_high-df$ef_vol_uncertainty_low)/3.92
             #Uncertainty presented as 95% CI as percentage of mean
-            df$SOC_ref_tonnes_C_ha_sd=(df$high_activity_clay_soils_HAC_error_positive/100*df$SOC_ref_tonnes_C_ha)/1.96
+            df$SOC_ref_tonnes_C_ha_sd=(df$SOC_ref_error_positive/100*df$SOC_ref_tonnes_C_ha)/1.96
             #Uncertainty presented as 2 sd as percentage of mean
             df$FLU_sd=(df$FLU_error_positive/100*df$FLU)/2
             df$FMG_sd=(df$FMG_error_positive/100*df$FMG)/2
