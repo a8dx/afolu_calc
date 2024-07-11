@@ -1,5 +1,3 @@
-## Python Code Afforestation/Reforestation Calculations
-
 # /***********************************************************************************************************
 #   Copyright © 2024 Mathematica, Inc. This software was developed by Mathematica as part of the AFOLU GHG Calculator 
 # project funded by USAID through Contract No. 51964. This code cannot be copied, distributed or used without 
@@ -7,10 +5,10 @@
 # ***********************************************************************************************************/
 
 # /**********************************************************************************************************
-# Filename: Afforestation:Reforestation_test.py
+# Filename: sample_ARR_gee-agb_GHG-calculations_updated.py
 # Author: Barbara Bomfim
 # Date Started: 06/28/2024
-# Last Edited: 07/10/2024
+# Last Edited: 07/11/2024
 # Purpose: AFOLU GHG Calculations for Afforestation/Reforestation (A/R) Interventions
 # **********************************************************************************************************/
 
@@ -26,17 +24,9 @@
 #           -tillage_type: Full Till, Reduced Till, No Till, Unknown
 #           -ag_inputs: Low, Medium, High without manure, High with manure, Unknown
 #           -fire_used: yes, no
-#           -aboveground biomass (AGB)
-#           -belowground biomass (BGB)
-#           -soil organic carbon (SOC)
-#           
 #  -All sub-interventions require:
 #           -forest_area: area that is being changed from previous land use to new A/R land use
 #           -number of improvements over initial scenario (0, 1 or 2)
-#           -AGB_gain: aboveground biomass yearly growth
-#           -AGB_loss: aboveground biomass loss due to wood removal, fuelwood collection, disturbance
-#           -BGB_gain: belowground biomass yearly growth
-#           -BGB_loss: belowground biomass loss due to wood removal, fuelwood collection, disturbance
 #.    -For Forest creation sub-intervention:
 #           -forest_creation: planted or natural forest (native forest or mangrove forest)
 #           -forest_type: selection from dropdown list
@@ -44,26 +34,25 @@
 #           -tillage_type: Full Till, Reduced Till, No Till, Unknown
 #.    -For nutrient management sub-intervention:
 #           -ag_inputs: Low, Medium, High without manure, High with manure, Unknown
-#           -SOC_change: soil organic carbon - yearly change
 #     -For fire management, user must provide:
 #.          -fire_used: yes, no
 #           -frequency of burn (number of years)
-#           -burn timing (early or mid to late dry season)
 
 #### Parameters and Paths ####
 # Calculations requires the following parameters and their associated uncertainty:
 
 ##AGB
-#AGBREF:AGB for the climate zone and soil type (t C/ha)
-#MAX:asymptote maximum peak biomass yield (t d.m./h) - d.m. = dry mass
-#k: parameter used in modeling tree growth (dimensionless)
-#Age: age of forest (years)
-#m: parameter used in modeling tree growth (dimensionless)
+#AGBREF:AGB for the climate zone and soil type (tC/ha)
+
+##BGB
+#BGBREF:BGB for the climate zone and soil type (tC/ha)
 
 ##SOC
 # SOCREF: Reference soil stock for the climate zone and soil type (t C/ha)
 # FLU: Land use emissions factor (1 for planted forest, 1 for natural forest)
-# FMG: Management factor for both business as usual and intervention scenario 
+# FMG: Management factor for both business as usual and intervention scenario
+# FMG: Tillage factor for both business as usual and intervention scenario (if 
+  #    tillage is not a subintervention then FMG = 1)
 # FI: C input factor for both business as usual and intervention scenario 
 
 ##N2O
@@ -113,12 +102,13 @@ import numpy as np
 from scipy.stats import norm
 from concurrent.futures import ProcessPoolExecutor
 import ee
+import re
 
 from helpers import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_stock
 
-
 ### STEP 1 - Estimate mean annual AGB (in Mg/ha) using GEDI dataset ####
 # GEE path: https://code.earthengine.google.com/?scriptPath=users%2Fbabomfimf%2FAGB-GEDI-L4A%3Atest-3_AGB_annual_mean
+## Anthony's GEE: https://code.earthengine.google.com/44d6aaa5db4764b5b5f3825baf900d04
 
 #if this doesn't work authenticate from the command line  by running `earthengine authenticate`
 ee.Authenticate()
@@ -145,25 +135,26 @@ filtered_gedi = gedi_l4a_monthly.filterBounds(polygon).filterDate('2019-01-01', 
 agbd_band = filtered_gedi.select('agbd')
 # Calculate annual mean
 agbd_image = agbd_band.reduce(ee.Reducer.mean())
+
 # Compute the mean annual AGBD value for the entire polygon
 average_agbd = agbd_image.reduceRegion(
     reducer=ee.Reducer.mean(),
     geometry=polygon,
     scale=25  # Scale should match the resolution of the dataset
 )
-
 average_agbd_dict = average_agbd.getInfo()
 print(f"{average_agbd_dict} Mg/ha")
 
 print("\nArea of the polygon:")
 print(f"{polygon.area().getInfo()/10000} ha") # to get area in hectares
 
-## JSON data input ##
+## JSON data input #####
+
 # JSON file path - Check the current working directory
 current_directory = os.getcwd()
 print("Current working directory:", current_directory)
 # Define the relative file path
-file_name = 'ARR_final_updated_updated.json'
+file_name = 'ARR_final_updated.json'
 file_path = os.path.join(current_directory, file_name)
 json_file_path = './ARR_final_updated.json'
 # Load data from the JSON file
@@ -171,6 +162,7 @@ with open(file_path, 'r') as file:
         data = json.load(file)
 
 ### STEP 2 - Calculate mean annual AGC stock in tCO2e/ha####
+
 def mean_annual_agc_stock(scenario):
     global data
     # Convert biomass stock to carbon stock in tCO2e/ha
@@ -195,7 +187,6 @@ def mean_annual_tot_c_stock(average_agbd_tco2e, scenario):
     ratio = data.get("scenarios").get(scenario)[0]["ratio_below_ground_biomass_to_above_ground_biomass"]
     average_bgbd_tco2e = convert_to_bgb(average_agbd_tco2e, ratio)
     average_total_tco2e = average_agbd_tco2e + average_bgbd_tco2e# in tCO2e/ha
-
 
 ### STEP 4 - Calculate Annual CO2 impact (∆CG)####
 
@@ -223,7 +214,6 @@ def calculate_annual_co2_impact(scenario, years):
     # Business-as-usual carbon stock in tC/ha.
     carbon_bau = get_carbon_stock(data, scenario=scenario, carbon_time_id="carbon_bau")
     # Change in carbon stock in the baseline scenario in tC/ha.
-    #FIXME: is every scenario only hae one of these?
     delta_carbon_0 = data.get("scenarios").get(scenario)[0]["delta_carbon_0"]
     
     carbon_i_co2e = convert_to_co2e(carbon_i)
@@ -330,7 +320,7 @@ def calculate_lfuelwood(scenario):
     # Carbon fraction.
     CF = scenario_data.get("CF")
 
-    # Handling missing data gracefully
+    # Handling missing data
     if None in [FGtrees, FGpart, BCEFr, ratio, D, CF]:
         print(f"Missing data for calculating Lfuelwood. Please check your data for scenario {scenario}.")
         return None
@@ -366,7 +356,7 @@ def calculate_ldisturbance(scenario):
     # Fraction of biomass carbon lost in disturbance (dimensionless).
     fd = scenario_data.get("fd")
 
-    # Handling missing data gracefully
+    # Handling missing data
     if None in [Adisturbance, Bw, ratio, fd]:
         print("Missing data for calculating Ldisturbance. Please check your data.")
         return None
@@ -432,7 +422,6 @@ def calculate_all(scenario):
     delta_co2_conversion = estimate_co2_conversion(scenario=scenario)
     result["delta_co2_conversion"] = delta_co2_conversion
 
-    #TODO:  ask if these are calculated but also are in the json file, which one should be used?
     # Calculate Lwood-removals
     lwood_removals = calculate_lwood_removals(scenario=scenario)
     result["lwood_removals"] = lwood_removals
@@ -460,231 +449,266 @@ def calculate_all(scenario):
     
     return result
 
-## END OF ABOVEGROUND AND BELOWGROUND CALCULATIONS ##
-
 bau_result = calculate_all(scenario="business_as_usual")
 print("\n\n")
 inter_result = calculate_all(scenario="intervention")
 
+#### Final biomass CO2 impact ####
+bau_bio_co2 = bau_result["annual_change_in_carbon_stocks"]
+inter_bio_co2 = inter_result["annual_change_in_carbon_stocks"]
+ghg_result = inter_bio_co2 - bau_bio_co2
+ghg_result
 
-###### NEED TO TEST CODE BELOW AND TO INCLUDE THE BIOMASS CALCULATIONS CALCULATIONS ABOVE #######
+# Load JSON data from a file
+with open('ARR_final_updated.json', 'r') as f:
+    data = json.load(f)
 
-def flatten_json(data):
-    # Extract intervention type
-    interv_sub = data.get("intervention_subcategory", None)
+# Extract the "years" variable from the "business_as_usual" and "intervention" scenarios
+years_bau = data["scenarios"]["business_as_usual"][0]["years"]
+years_intervention = data["scenarios"]["intervention"][0]["years"]
+
+print("Years (Business As Usual):", years_bau)
+print("Years (Intervention):", years_intervention)
+
+print(f"The years value is: {years}")
+print(f"Annual biomass CO2 impact (∆CB): {ghg_result} tCO2e/yr in {years_bau} years of intervention")
+
+##### SOIL GHG CALCULATIONS ######
+
+## Getting json data input ##
+# Load data from JSON input
+with open('ARR_final_updated.json') as f:
+    data = json.load(f)
+
+# Extract intervention parameters
+interv_sub = data['intervention_subcategory']  # intervention type
+
+# Convert common scenarios to DataFrame
+common = pd.json_normalize(data['scenarios']['common'])
+
+# Convert business-as-usual scenario to DataFrame
+bau = pd.json_normalize(data['scenarios']['business_as_usual'])
+bau = bau.drop(columns=['aoi_subregions'])
+bau
+
+# Extract AOI subregions for business-as-usual
+bau_aoi = pd.json_normalize(data['scenarios']['business_as_usual'], 'aoi_subregions')
+bau_aoi['aoi_id'] = range(1, len(bau_aoi) + 1)
+bau_aoi
+
+# Combine BAU and AOI subregions
+bau = pd.concat([bau, bau], ignore_index=True)
+bau = pd.concat([bau, bau_aoi], axis=1)
+bau['scenario'] = 'business-as-usual'
+bau
+
+# Convert intervention scenario to DataFrame
+int_df = pd.json_normalize(data['scenarios']['intervention'])
+int_df = int_df.drop(columns=['aoi_subregions'])
+int_df
+
+# Extract AOI subregions for intervention
+int_aoi = pd.json_normalize(data['scenarios']['intervention'], 'aoi_subregions')
+int_aoi['aoi_id'] = range(1, len(int_aoi) + 1)
+int_aoi
+
+# Combine intervention and AOI subregions
+int_df = pd.concat([int_df, int_df], ignore_index=True)
+int_df = pd.concat([int_df, int_aoi], axis=1)
+int_df['scenario'] = 'intervention'
+int_df
+
+# Combine BAU and intervention DataFrames
+df = pd.concat([bau, int_df], ignore_index=True)
+
+# Repeat common scenarios DataFrame for each entry
+common_repeated = pd.concat([common] * len(df), ignore_index=True)
+df = pd.concat([common_repeated, df], axis=1)
+
+# Convert data types appropriately
+df = df.apply(pd.to_numeric, errors='ignore')
+
+# Extract unique AOI identifiers
+AOIs = df['aoi_id'].unique()
+AOIs
+
+# Convert uncertainty values to standard deviation (sd)
+# Uncertainty presented as 95% CI
+unc_low = [col for col in df.columns if re.search("uncertainty_low", col)]
+unc_low_name = df[unc_low].columns
+unc_cols = [re.sub("uncertainty_low.*", "", col) for col in unc_low_name]
+
+for a in unc_cols:
+    df[f"{a}sd"] = (df[f"{a}uncertainty_high"] - df[f"{a}uncertainty_low"]) / 3.92
+
+# Drop columns with "uncertainty" in their name
+df = df[df.columns.drop(list(df.filter(regex='uncertainty')))]
+
+# Uncertainty presented as 95% CI as percentage of mean
+df["SOC_ref_tonnes_C_ha_sd"] = (df["low_activity_clay_soils_LAC_error_positive"] / 100 * df["SOC_ref_tonnes_C_ha"]) / 1.96
+
+# Uncertainty presented as 2 sd as percentage of mean
+df["FMG_sd"] = (df["FMG_error_positive"] / 100 * df["FMG"]) / 2
+df["FI_sd"] = (df["FI_error_positive"] / 100 * df["FI"]) / 2
+
+# Remove other uncertainty columns
+df = df[df.columns.drop(list(df.filter(regex='error')))]
+
+# Display structure of the DataFrame
+print(df.info())
+
+## Soil GHG Calculations ##
+nx=500 # number of Monte Carlo iterations
+
+def GHGcalc(i, df, nx):
+    temp_bau = df[(df['aoi_id'] == i) & (df['scenario'] == 'business-as-usual')]
+    temp_int = df[(df['aoi_id'] == i) & (df['scenario'] == 'intervention')]
+    results_unc = np.zeros((nx, 44))
     
-    # Convert common scenario to DataFrame
-    common = pd.json_normalize(data["scenarios"]["common"])
+    results_unc[:, 0] = i
+    results_unc[:, 1] = temp_bau['area'].values[0]
+    results_unc[:, 2] = np.arange(1, nx + 1)
+
+    for m in range(nx):
+        ####SOC Stock Change####
+        SOCREF = np.random.normal(temp_bau['SOC_ref_tonnes_C_ha'].values[0], temp_bau['SOC_ref_tonnes_C_ha_sd'].values[0])
+        FLUbau = temp_bau['FLU'].values[0]
+        FMGbau = np.random.normal(temp_bau['FMG'].values[0], temp_bau['FMG_sd'].values[0])
+        FIbau = np.random.normal(temp_bau['FI'].values[0], temp_bau['FI_sd'].values[0])
+        FLUint = temp_int['FLU'].values[0]
+        FMGint = np.random.normal(temp_int['FMG'].values[0], temp_int['FMG_sd'].values[0])
+        FIint = np.random.normal(temp_int['FI'].values[0], temp_int['FI_sd'].values[0])
+        SOCbau = SOCREF * FLUbau * FMGbau * FIbau
+        SOCint = SOCREF * FLUint * FMGint * FIint
+        dSOC = SOCbau - SOCint
+        results_unc[m, 3] = (dSOC * 44 / 12) + ghg_result
+
+        ####N2O emissions####
+        # Calculate change in N sources
+        FSN = (temp_int['n_fertilizer_amount'].values[0] * temp_int['n_fertilizer_percent'].values[0] / 100 -
+               temp_bau['n_fertilizer_amount'].values[0] * temp_bau['n_fertilizer_percent'].values[0] / 100) if 'nutrient management' in interv_sub else 0
+        FON = (temp_int['org_amend_rate'].values[0] * temp_int['org_amend_npercent'].values[0] / 100 -
+               temp_bau['org_amend_rate'].values[0] * temp_bau['org_amend_npercent'].values[0] / 100) if 'nutrient management' in interv_sub else 0
+        FSOM = dSOC / 10 * 1000
+
+        # Calculate N emissions
+        EFdir = np.random.normal(temp_bau['ef_direct_n2o'].values[0], temp_bau['ef_direct_n2o_sd'].values[0])
+        FRAC_GASF = np.random.normal(temp_bau['frac_syn_fert'].values[0], temp_bau['frac_syn_fert_sd'].values[0])
+        FRAC_GASM = np.random.normal(temp_bau['frac_org_fert'].values[0], temp_bau['frac_org_fert_sd'].values[0])
+        EF_vol = np.random.normal(temp_bau['ef_vol'].values[0], temp_bau['ef_vol_sd'].values[0])
+        FRAC_LEACH = np.random.normal(temp_bau['frac_leach'].values[0], temp_bau['frac_leach_sd'].values[0])
+        EF_leach = np.random.normal(temp_bau['ef_leaching'].values[0], temp_bau['ef_leaching_sd'].values[0])
+        #EF_PRP = np.random.normal(temp_bau['ef_prp'].values[0], temp_bau['ef_prp_sd'].values[0])
+        dirN = (FSN + FON + FSOM) * EFdir
+        volN = (FSN * FRAC_GASF + (FON) * FRAC_GASM) * EF_vol
+        leachN = (FSN + FON + FSOM) * FRAC_LEACH * EF_leach
+        N2O = (dirN + volN + leachN) / 1000 * 44 / 28
+        results_unc[m, 4:24] = N2O
+
+        # Add change in N2O due to fire management
+        if 'change in fire management' in interv_sub:
+            fire_n2o_ef = np.random.normal(temp_bau['burning_n2o_ef_mean'].values[0], temp_bau['burning_n2o_ef_sd'].values[0])
+            if temp_bau['fire_used'].values[0] == 'True':
+                CF_bau = np.random.normal(temp_bau['combustion_factor_mean'].values[0], temp_bau['combustion_factor_sd'].values[0])
+                MB_bau = np.random.normal(temp_bau['fuel_biomass_mean'].values[0], temp_bau['fuel_biomass_sd'].values[0])
+                fireN2O_bau = MB_bau * CF_bau * fire_n2o_ef / 1000
+                results_unc[m, 4] = N2O - fireN2O_bau
+                fire_per_bau = temp_bau['fire_management_years'].values[0]
+                fire_yrs_bau = []
+                for y in range(1, 20):
+                    if y % fire_per_bau == 0:
+                        fire_yrs_bau.append(y)
+                for y in fire_yrs_bau:
+                    results_unc[m, 4 + y] = N2O - fireN2O_bau
+
+            if temp_int['fire_used'].values[0] == 'True':
+                CF_int = np.random.normal(temp_int['combustion_factor_mean'].values[0], temp_int['combustion_factor_sd'].values[0])
+                MB_int = np.random.normal(temp_int['fuel_biomass_mean'].values[0], temp_int['fuel_biomass_sd'].values[0])
+                fireN2O_int = MB_int * CF_int * fire_n2o_ef / 1000
+                results_unc[m, 4] += fireN2O_int
+                fire_per_int = temp_int['fire_management_years'].values[0]
+                fire_yrs_int = []
+                for y in range(1, 20):
+                    if y % fire_per_int == 0:
+                        fire_yrs_int.append(y)
+                for y in fire_yrs_int:
+                    results_unc[m, 4 + y] += fireN2O_int
+
+        ####CH4 emissions####
+
+        # Emissions from fire management
+        if 'change in fire management' in interv_sub:
+            fire_ch4_ef = np.random.normal(temp_bau['burning_ch4_ef_mean'].values[0], temp_bau['burning_ch4_ef_sd'].values[0])
+            if temp_bau['fire_used'].values[0] == 'True':
+                fireCH4_bau = MB_bau * CF_bau * fire_ch4_ef / 1000
+                results_unc[m, 24] = CH4_live - fireCH4_bau
+                for y in fire_yrs_bau:
+                    results_unc[m, 24 + y] = CH4_live - fireCH4_bau
+
+            if temp_int['fire_used'].values[0] == 'True':
+                fireCH4_int = MB_int * CF_int * fire_ch4_ef / 1000
+                results_unc[m, 24] += fireCH4_int
+                for y in fire_yrs_int:
+                    results_unc[m, 24 + y] += fireCH4_int
+
+    results_unc_df = pd.DataFrame(results_unc, columns=['AOI', 'Area', 'Rep', 'SOC'] + [f'N2O_y{y}' for y in range(1, 21)] + [f'CH4_y{y}' for y in range(1, 21)])
+    results_unc_df = results_unc_df.apply(pd.to_numeric, errors='coerce')
+    return results_unc_df
+
+# Extract mean and standard deviation from each subAOI and store in results dataframe
+for i in range(len(AOIs)):
+    mc.append(pd.DataFrame(np.random.randn(20, 44), columns=['Area'] + ['V'+str(i) for i in range(1, 44)]))
+
+# Extract mean and sd from each subAOI and store in results df
+resdf = np.zeros((len(AOIs), 166))
+resdf[:, 0] = AOIs
+columns = ['AOI', 'Area', 'CO2_thayr'] + \
+          [f'N2O_thayr_y{i}' for i in range(1, 21)] + \
+          [f'CH4_thayr_y{i}' for i in range(1, 21)] + \
+          ['sdCO2ha'] + [f'sdN2Oha_y{i}' for i in range(1, 21)] + \
+          [f'sdCH4ha_y{i}' for i in range(1, 21)] + \
+          ['CO2_tyr'] + [f'N2O_tyr_y{i}' for i in range(1, 21)] + \
+          [f'CH4_tyr_y{i}' for i in range(1, 21)] + \
+          ['sdCO2'] + [f'sdN2O_y{i}' for i in range(1, 21)] + \
+          [f'sdCH4_y{i}' for i in range(1, 21)]
+resdf = pd.DataFrame(resdf, columns=columns)
+resdf
+
+for a in range(len(AOIs)):
+    temp_res = mc[a]
+    resdf.at[a, 'Area'] = temp_res['Area'].mean()
+    for z in range(4, 44):
+        resdf.at[a, columns[z-1]] = temp_res.iloc[:, z].mean()
+        resdf.at[a, columns[z+40]] = temp_res.iloc[:, z].std()
+
+for k in range(3, 84):
+    resdf.iloc[:, 82+k] = resdf['Area'] * resdf.iloc[:, k]
+
+resdf = resdf.drop(columns=['Area'])
+
+# Convert to JSON output
+restib = []
+
+for index, row in resdf.iterrows():
+    aoi_tib = {
+        "AOI": f"Sub_AOI-{index+1}",
+        "CO2_thayr": [row['CO2_thayr']] * 20,
+        "sdCO2ha": [row['sdCO2ha']] * 20,
+        "CO2_tyr": [row['CO2_tyr']] * 20,
+        "sdCO2": [row['sdCO2']] * 20,
+        "N2O_thayr": [row[f'N2O_thayr_y{y}'] for y in range(1, 21)],
+        "sdN2Oha": [row[f'sdN2Oha_y{y}'] for y in range(1, 21)],
+        "N2O_tyr": [row[f'N2O_tyr_y{y}'] for y in range(1, 21)],
+        "sdN2O": [row[f'sdN2O_y{y}'] for y in range(1, 21)],
+        "CH4_thayr": [row[f'CH4_thayr_y{y}'] for y in range(1, 21)],
+        "sdCH4ha": [row[f'sdCH4ha_y{y}'] for y in range(1, 21)],
+        "CH4_tyr": [row[f'CH4_tyr_y{y}'] for y in range(1, 21)],
+        "sdCH4": [row[f'sdCH4_y{y}'] for y in range(1, 21)]
+    }
+    restib.append(aoi_tib)
+
+json_output = json.dumps(restib, indent=4)
+with open(f"/Users/barbarabomfim/Dropbox/R/afolu_calc/output/{interv_sub}.json", "w") as f:
+    f.write(json_output)
     
-    # Convert business-as-usual scenario to DataFrame
-    bau_list = []
-
-#for entry in data["scenarios"]["business_as_usual"]:
-#    bau = pd.json_normalize(entry).drop(columns=["aoi_subregions"], errors='ignore')
-#    bau_aoi = pd.json_normalize(entry["aoi_subregions"])
-#    bau_aoi["aoi_id"] = range(1, len(bau_aoi) + 1)
-#    bau = pd.concat([bau, bau], ignore_index=True)
-#    bau = pd.concat([bau, bau_aoi], axis=1)
-#    bau["scenario"] = "business-as-usual"
-#    bau_list.append(bau)
-
-#bau = pd.concat(bau_list, ignore_index=True)
-
-#    # Convert intervention scenario to DataFrame
-#    int_list = []
-    
-#for entry in data["scenarios"]["intervention"]:
-#        int_df = pd.json_normalize(entry).drop(columns=["aoi_subregions"], errors='ignore')
-#        int_aoi = pd.json_normalize(entry["aoi_subregions"])
-#        int_aoi["aoi_id"] = range(1, len(int_aoi) + 1)
-#        int_df = pd.concat([int_df, int_df], ignore_index=True)
-#        int_df = pd.concat([int_df, int_aoi], axis=1)
-#        int_df["scenario"] = "intervention"
-#        int_list.append(int_df)
-#int_df = pd.concat(int_list, ignore_index=True)
-
-## Combine all dataframes
-
-##NEED TO FIX THIS PART OF THE CODE AND BELOW
-#    df = pd.concat([bau, int_df], ignore_index=True).reset_index(drop=True)
-#    common_repeated = pd.concat([common] * len(df), ignore_index=True).reset_index(drop=True)
-#    df = pd.concat([common_repeated, df], axis=1).reset_index(drop=True)
-#    df.columns = [f'common_{col}' for col in common.columns] + list(df.columns[len(common.columns):])
-
-## Convert columns to appropriate types
-#   df = df.apply(pd.to_numeric, errors='ignore')
-
-## Extract unique AOIs
-#AOIs = df["aoi_id"].unique()
-
-## Convert uncertainty values to standard deviation
-## Uncertainty presented as 95% CI
-#unc_low = [col for col in df.columns if "uncertainty_low" in col]
-#unc_low_name = unc_low
-#unc_cols = [col.replace("uncertainty_low", "") for col in unc_low_name]
-
-#for a in unc_cols:
-#    df[a + "sd"] = (df[a + "uncertainty_high"] - df[a + "uncertainty_low"]) / 3.92
-
-#df = df.drop(columns=[col for col in df.columns if "uncertainty" in col])
-
-## Uncertainty presented as 95% CI as percentage of mean
-#if "high_activity_clay_soils_HAC_error_positive" in df3.columns:
-#    df["SOC_ref_tonnes_C_ha_sd"] = (df["high_activity_clay_soils_HAC_error_positive"] / 100 * df["SOC_ref_tonnes_C_ha"]) / 1.96
-
-## Uncertainty presented as 2 sd as percentage of mean
-#if "FMG_error_positive" in df.columns:
-#    df["FMG_sd"] = (df["FMG_error_positive"] / 100 * df["FMG"]) / 2
-#if "FI_error_positive" in df.columns:
-#    df["FI_sd"] = (df["FI_error_positive"] / 100 * df["FI"]) / 2
-
-## Remove other uncertainty columns 
-#df = df.drop(columns=[col for col in df.columns if "error" in col])
-
-#   return df, AOIs, interv_sub
-
-## Specify the file path
-#file_path = "/Users/barbarabomfim/Dropbox/R/afolu_calc/ARR_final_updated.json"
-
-## Load the JSON data
-#data = load_json(file_path)
-
-## Flatten the JSON data
-##df, AOIs, interv_sub = flatten_json(data)
-
-## Display the DataFrame structure
-#print(df.info())
-
-#####GHG Calculations - Afforestation/Reforestation####
-## Need to include biomass calculations from beginning of script
-
-#import numpy as np
-#import pandas as pd
-
-#def rnorm(mean, sd):
-#    return np.random.normal(mean, sd)
-
-#def ifelse(condition, true_val, false_val):
-#    return true_val if condition else false_val
-
-#def GHGcalc(i, df, nx):
-#    """
-#    Function to calculate GHG emissions using Monte Carlo iterations
-
-#    Parameters:
-#    i : int
-#        Index of the Area of Interest (AOI)
-#    df : pandas.DataFrame
-#        DataFrame containing the input data
-#    nx : int
-#        Number of Monte Carlo iterations
-
-#    Returns:
-#    results_unc : pandas.DataFrame
-#        DataFrame containing the results of GHG calculations
-#    """
-#    temp_bau = df[(df['aoi_id'] == i) & (df['scenario'] == 'business-as-usual')]
-#    temp_int = df[(df['aoi_id'] == i) & (df['scenario'] == 'intervention')]
-    
-#    results_unc = np.zeros((nx, 44))
-#    results_unc[:, 0] = i
-#    results_unc[:, 1] = temp_bau['area'].values[0]
-#    results_unc[:, 2] = np.arange(1, nx + 1)
-    
-#    column_names = ['AOI', 'Area', 'Rep', 'SOC'] + [f'N2O_y{year}' for year in range(1, 21)] + [f'CH4_y{year}' for year in range(1, 21)]
-    
-#    for m in range(nx):
-#        ####SOC Stock Change####
-#        SOCREF = rnorm(temp_bau['SOC_ref_tonnes_C_ha'].values[0], temp_bau['SOC_ref_tonnes_C_ha_sd'].values[0])
-#        FLUbau = temp_bau['FLU'].values[0]
-#        FMGbau = rnorm(temp_bau['FMG'].values[0], temp_bau['FMG_sd'].values[0])
-#        FIbau = rnorm(temp_bau['FI'].values[0], temp_bau['FI_sd'].values[0])
-#        FLUint = temp_int['FLU'].values[0]
-#        FMGint = rnorm(temp_int['FMG'].values[0], temp_int['FMG_sd'].values[0])
-#        FIint = rnorm(temp_int['FI'].values[0], temp_int['FI_sd'].values[0])
-        
-#        SOCbau = SOCREF * FLUbau * FMGbau * FIbau
-#        SOCint = SOCREF * FLUint * FMGint * FIint
-#        dSOC = SOCbau - SOCint
-#        results_unc[m, 3] = dSOC * 44 / 12
-
-#        #### Nitrogen Emissions ####
-#        FSN = ifelse('nutrient management' in df['intervention_subcategory'].values[0],
-#                     temp_int['n_fertilizer_amount'].values[0] * temp_int['n_fertilizer_percent'].values[0] / 100 -
-#                     temp_bau['n_fertilizer_amount'].values[0] * temp_bau['n_fertilizer_percent'].values[0] / 100, 0)
-#        FON = ifelse('nutrient management' in df['intervention_subcategory'].values[0],
-#                     temp_int['org_amend_rate'].values[0] * temp_int['org_amend_npercent'].values[0] / 100 -
-#                     temp_bau['org_amend_rate'].values[0] * temp_bau['org_amend_npercent'].values[0] / 100, 0)
-#        FSOM = dSOC / 10 * 1000  # FSOM
-        
-#        # Calculate N emissions
-#        EFdir = rnorm(temp_bau['ef_direct_n2o'].values[0], temp_bau['ef_direct_n2o_sd'].values[0])
-#        FRAC_GASF = rnorm(temp_bau['frac_syn_fert'].values[0], temp_bau['frac_syn_fert_sd'].values[0])
-#        FRAC_GASM = rnorm(temp_bau['frac_org_fert'].values[0], temp_bau['frac_org_fert_sd'].values[0])
-#        EF_vol = rnorm(temp_bau['ef_vol'].values[0], temp_bau['ef_vol_sd'].values[0])
-#        FRAC_LEACH = rnorm(temp_bau['frac_leach'].values[0], temp_bau['frac_leach_sd'].values[0])
-#        EF_leach = rnorm(temp_bau['ef_leaching'].values[0], temp_bau['ef_leaching_sd'].values[0])
-#        EF_PRP = rnorm(temp_bau['ef_prp'].values[0], temp_bau['ef_prp_sd'].values[0])
-        
-#        dirN = (FSN + FON + FSOM) * EFdir + 0 * EF_PRP  # Assuming FPRP is zero since it's not defined
-#        volN = (FSN * FRAC_GASF + (FON + 0) * FRAC_GASM) * EF_vol  # Assuming FPRP is zero since it's not defined
-#        leachN = (FSN + FON + FSOM + 0) * FRAC_LEACH * EF_leach  # Assuming FPRP is zero since it's not defined
-        
-#        N2O = (dirN + volN + leachN) / 1000 * 44 / 28  # sum and convert to tN2O
-#        results_unc[m, 4:24] = N2O
-        
-#        # Change in N2O due in fire management
-#        if 'change in fire management' in df['intervention_subcategory'].values[0]:
-#            fire_n2o_ef = rnorm(temp_bau['burning_n2o_ef_mean'].values[0], temp_bau['burning_n2o_ef_sd'].values[0])
-            
-#            # Add fires for bau scenario
-#            if temp_bau['fire_used'].values[0] == "True":
-#                CF_bau = rnorm(temp_bau['combustion_factor_mean'].values[0], temp_bau['combustion_factor_sd'].values[0])
-#                MB_bau = rnorm(temp_bau['fuel_biomass_mean'].values[0], temp_bau['fuel_biomass_sd'].values[0])
-#                fireN2O_bau = MB_bau * CF_bau * fire_n2o_ef / 1000
-#                results_unc[m, 4] = N2O - fireN2O_bau
-#                fire_per_bau = temp_bau['fire_management_years'].values[0]
-#                fire_yrs_bau = [y for y in range(1, 20) if y % fire_per_bau == 0]
-#                results_unc[m, [4 + year for year in fire_yrs_bau]] = N2O - fireN2O_bau
-            
-#            if temp_int['fire_used'].values[0] == "True":
-#                CF_int = rnorm(temp_int['combustion_factor_mean'].values[0], temp_int['combustion_factor_sd'].values[0])
-#                MB_int = rnorm(temp_int['fuel_biomass_mean'].values[0], temp_int['fuel_biomass_sd'].values[0])
-#                fireN2O_int = MB_int * CF_int * fire_n2o_ef / 1000
-#                results_unc[m, 4] += fireN2O_int
-#                fire_per_int = temp_int['fire_management_years'].values[0]
-#                fire_yrs_int = [y for y in range(1, 20) if y % fire_per_int == 0]
-#                results_unc[m, [4 + year for year in fire_yrs_int]] += fireN2O_int
-
-#        #### CH4 emissions ####
-#        if 'change in fire management' in df['intervention_subcategory'].values[0]:
-#            fire_ch4_ef = rnorm(temp_bau['burning_ch4_ef_mean'].values[0], temp_bau['burning_ch4_ef_sd'].values[0])
-            
-#            # Include fire for bau scenario
-#            if temp_bau['fire_used'].values[0] == "True":
-#                fireCH4_bau = MB_bau * CF_bau * fire_ch4_ef / 1000
-#                results_unc[m, 24] = 0 - fireCH4_bau  # Assuming CH4_live is zero since it's not defined
-#                results_unc[m, [24 + year for year in fire_yrs_bau]] = 0 - fireCH4_bau  # Assuming CH4_live is zero since it's not defined
-            
-#            if temp_int['fire_used'].values[0] == "True":
-#                fireCH4_int = MB_int * CF_int * fire_ch4_ef / 1000
-#                results_unc[m, 24] += fireCH4_int
-#                results_unc[m, [24 + year for year in fire_yrs_int]] += fireCH4_int
-
-#    results_unc_df = pd.DataFrame(results_unc, columns=column_names)
-#    results_unc_df = results_unc_df.apply(pd.to_numeric)
-    
-#    return results_unc_df
-
-## Example usage
-## Load the flattened DataFrame
-#file_path = '/Users/barbarabomfim/Dropbox/R/afolu_calc/ARR_final_updated.json'
-#data = load_json(file_path)
-#flattened_df = flatten_json(data)
-
-## Perform GHG calculations for the first AOI
-#nx = 500  # Number of Monte Carlo iterations
-#results = GHGcalc(1, flattened_df, nx)
-
-## Display the results
-#print(results)
+json_output
