@@ -1,3 +1,5 @@
+## Python Code Afforestation/Reforestation Calculations
+
 # /***********************************************************************************************************
 #   Copyright © 2024 Mathematica, Inc. This software was developed by Mathematica as part of the AFOLU GHG Calculator 
 # project funded by USAID through Contract No. 51964. This code cannot be copied, distributed or used without 
@@ -8,7 +10,7 @@
 # Filename: sample_ARR_gee-agb_GHG-calculations_updated.py
 # Author: Barbara Bomfim
 # Date Started: 06/28/2024
-# Last Edited: 07/11/2024
+# Last Edited: 07/14/2024
 # Purpose: AFOLU GHG Calculations for Afforestation/Reforestation (A/R) Interventions
 # **********************************************************************************************************/
 
@@ -50,9 +52,7 @@
 ##SOC
 # SOCREF: Reference soil stock for the climate zone and soil type (t C/ha)
 # FLU: Land use emissions factor (1 for planted forest, 1 for natural forest)
-# FMG: Management factor for both business as usual and intervention scenario
-# FMG: Tillage factor for both business as usual and intervention scenario (if 
-  #    tillage is not a subintervention then FMG = 1)
+# FMG: Management factor for both business as usual and intervention scenario 
 # FI: C input factor for both business as usual and intervention scenario 
 
 ##N2O
@@ -70,7 +70,7 @@
 # burning_ch4_ef: Emissions factor for CH4 from burning (g CH4/kg dry matter burnt)
 
 #### Outputs ####
-# Outputs will be saved to a json file that includes annual CO2, N2O, and CH4 impacts of
+# Outputs saved to a json file that includes annual CO2, N2O, and CH4 impacts of
 #    the intervention on both a per hectare and total area basis for each subAOI over a 20 year period.
 #    The json file will have the following format:
 # [
@@ -104,7 +104,8 @@ from concurrent.futures import ProcessPoolExecutor
 import ee
 import re
 
-from helpers import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_stock
+from helpersARR_final import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_stock, sanitize_filename
+
 
 ### STEP 1 - Estimate mean annual AGB (in Mg/ha) using GEDI dataset ####
 # GEE path: https://code.earthengine.google.com/?scriptPath=users%2Fbabomfimf%2FAGB-GEDI-L4A%3Atest-3_AGB_annual_mean
@@ -154,39 +155,83 @@ print(f"{polygon.area().getInfo()/10000} ha") # to get area in hectares
 current_directory = os.getcwd()
 print("Current working directory:", current_directory)
 # Define the relative file path
-file_name = 'ARR_final_updated.json'
+file_name = 'ARR_final_GHG_calculations.json'
 file_path = os.path.join(current_directory, file_name)
-json_file_path = './ARR_final_updated.json'
+json_file_path = './ARR_final_GHG_Calculations.json'
 # Load data from the JSON file
 with open(file_path, 'r') as file:
         data = json.load(file)
 
-### STEP 2 - Calculate mean annual AGC stock in tCO2e/ha####
+#### STEP 2 - Calculate mean annual AGC stock in tCO2e/ha ####
 
-def mean_annual_agc_stock(scenario):
+def mean_annual_agc_stock(scenario, log_level='info'):
     global data
-    # Convert biomass stock to carbon stock in tCO2e/ha
-    average_agbd_value = average_agbd_dict.get('agbd_mean',0)
-    area_converted = print(f"{polygon.area().getInfo()/10000} ha")
-    area_converted_dict = polygon.area().getInfo()/10000
-    area_converted_yr = float(area_converted_dict)
-
-    print(f"Average Aboveground Biomass Density: {average_agbd_value} Mg/ha")
-    CF = data.get("scenarios").get(scenario)[0]["CF"]
+    
+    scenario_data = data["scenarios"][scenario][0]
+    
+    average_agbd_value = average_agbd_dict.get('agbd_mean', 0)
+    area_converted = polygon.area().getInfo()/10000
+    area_converted_yr = float(area_converted)
+    
+    CF = scenario_data["CF"]
     average_agbd_cstock = convert_to_c(average_agbd_value, CF)
     average_agbd_tco2e = convert_to_co2e(average_agbd_cstock)
-    print(f"Average Aboveground Carbon Stock: {average_agbd_tco2e} tCO2e/ha")
-    return average_agbd_tco2e
-
+    
+    if log_level == 'debug':
+        print(f"{area_converted} ha")
+        print(f"Average Aboveground Biomass Density: {average_agbd_value} Mg/ha")
+        print(f"Average Aboveground Carbon Stock: {average_agbd_tco2e} tCO2e/ha")
+    
+    subregion_results = []
+    for subregion in scenario_data["aoi_subregions"]:
+        subregion_area = subregion["area"]
+        subregion_fraction = subregion_area / area_converted_yr
+        
+        subregion_agbd_tco2e = average_agbd_tco2e * subregion_fraction
+        
+        subregion_results.append({
+            "aoi_id": subregion["aoi_id"],
+            "area": subregion_area,
+            "carbon_stock": subregion_agbd_tco2e
+        })
+        
+        if log_level == 'debug':
+            print(f"Subregion {subregion['aoi_id']}: {subregion_agbd_tco2e} tCO2e")
+    
+    return subregion_results
 
 ### STEP 3 - Calculate mean annual Total C stock (sum AGC and BGC) ####
 
-def mean_annual_tot_c_stock(average_agbd_tco2e, scenario):
+def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
     global data
-    # Calculate belowground carbon stock
-    ratio = data.get("scenarios").get(scenario)[0]["ratio_below_ground_biomass_to_above_ground_biomass"]
-    average_bgbd_tco2e = convert_to_bgb(average_agbd_tco2e, ratio)
-    average_total_tco2e = average_agbd_tco2e + average_bgbd_tco2e# in tCO2e/ha
+    
+    scenario_data = data["scenarios"][scenario][0]
+    ratio = scenario_data["ratio_below_ground_biomass_to_above_ground_biomass"]
+    
+    total_results = []
+    
+    for subregion in subregion_results:
+        average_agbd_tco2e = subregion["carbon_stock"]
+        
+        average_bgbd_tco2e = convert_to_bgb(average_agbd_tco2e, ratio)
+        average_total_tco2e = average_agbd_tco2e + average_bgbd_tco2e
+        
+        total_results.append({
+            "aoi_id": subregion["aoi_id"],
+            "area": subregion["area"],
+            "aboveground_carbon_stock": average_agbd_tco2e,
+            "belowground_carbon_stock": average_bgbd_tco2e,
+            "total_carbon_stock": average_total_tco2e
+        })
+        
+        if log_level == 'debug':
+            print(f"Subregion {subregion['aoi_id']}:")
+            print(f"  Aboveground Carbon Stock: {average_agbd_tco2e:.2f} tCO2e/ha")
+            print(f"  Belowground Carbon Stock: {average_bgbd_tco2e:.2f} tCO2e/ha")
+            print(f"  Total Carbon Stock: {average_total_tco2e:.2f} tCO2e/ha")
+    
+    return total_results
+
 
 ### STEP 4 - Calculate Annual CO2 impact (∆CG)####
 
@@ -195,67 +240,108 @@ def mean_annual_tot_c_stock(average_agbd_tco2e, scenario):
 #Carbon-i: carbon stock after intervention (tC/ha) - average_agbd_cstock for year i after intervention
 #Carbon-bau: carbon stock under business-as-usual (without intervention) - average_agbd_cstock for year i without intervention
 # Define equation to calculate Annual CO2 impact (∆CG)
-def calculate_annual_co2_impact(scenario, years):
-    """
-    Calculate the annual CO2 impact using the provided equation.
-
-    Parameters:
-    scenario (str): Scenario in question
-    years (int): Number of years over which the change is calculated.
-
-    Returns:
-    float: Annual CO2 impact in tCO2e/yr.
-    """
+def calculate_annual_co2_impact(scenario, years, log_level='info'):
     global data
-    # Carbon stock at year i in tC/ha.
-    carbon_i = get_carbon_stock(data, scenario=scenario, carbon_time_id="carbon_i")
-    # Initial carbon stock in tC/ha.
-    carbon_0 = get_carbon_stock(data, scenario=scenario, carbon_time_id="carbon_0")
-    # Business-as-usual carbon stock in tC/ha.
-    carbon_bau = get_carbon_stock(data, scenario=scenario, carbon_time_id="carbon_bau")
-    # Change in carbon stock in the baseline scenario in tC/ha.
-    delta_carbon_0 = data.get("scenarios").get(scenario)[0]["delta_carbon_0"]
     
-    carbon_i_co2e = convert_to_co2e(carbon_i)
-    carbon_0_co2e = convert_to_co2e(carbon_0)
-    carbon_bau_co2e = convert_to_co2e(carbon_bau)
-    delta_carbon_0_co2e = convert_to_co2e(delta_carbon_0)
-
-    delta_CG = ((carbon_i_co2e - carbon_0_co2e) - (carbon_bau_co2e - delta_carbon_0_co2e)) / years
-    print(f"Annual CO2 impact (∆CG): {delta_CG} tCO2e/yr in {years} years of intervention")
-    return delta_CG
+    carbon_i = get_carbon_stock(data, scenario=scenario, carbon_time_id="carbon_i")
+    carbon_0 = get_carbon_stock(data, scenario=scenario, carbon_time_id="carbon_0")
+    carbon_bau = get_carbon_stock(data, scenario=scenario, carbon_time_id="carbon_bau")
+    
+    scenario_data = data["scenarios"][scenario][0]
+    delta_carbon_0 = scenario_data["delta_carbon_0"]
+    
+    results = []
+    total_impact = 0
+    total_area = 0
+    
+    for i, subregion in enumerate(carbon_i):
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
+        
+        carbon_i_co2e = convert_to_co2e(subregion["carbon_stock"])
+        carbon_0_co2e = convert_to_co2e(carbon_0[i]["carbon_stock"])
+        carbon_bau_co2e = convert_to_co2e(carbon_bau[i]["carbon_stock"])
+        delta_carbon_0_co2e = convert_to_co2e(delta_carbon_0)
+        
+        delta_CG = ((carbon_i_co2e - carbon_0_co2e) - (carbon_bau_co2e - delta_carbon_0_co2e)) / years
+        
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "delta_CG": delta_CG
+        })
+        
+        total_impact += delta_CG * area
+        total_area += area
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Annual CO2 impact (∆CG): {delta_CG:.2f} tCO2e/yr in {years} years of intervention")
+    
+    average_impact = total_impact / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nTotal annual CO2 impact across all subregions: {total_impact:.2f} tCO2e/yr")
+        print(f"Average annual CO2 impact per hectare: {average_impact:.2f} tCO2e/ha/yr")
+    
+    return results
 
 ### Step 5 #### Estimate Initial change in biomass carbon stocks on converted land
 #Adapt Equation 2.16 to estimate ∆C-CONVERSION as the immediate change in biomass due to conversion.
 #∆C-CONVERSION = (AGB month after - AGB before) x area of land converted
-def estimate_co2_conversion(scenario):
+def estimate_co2_conversion(scenario, log_level='info'):
     """
-    Estimate ∆C-CONVERSION as the immediate change in biomass due to conversion.
-
+    Estimate ∆C-CONVERSION as the immediate change in biomass due to conversion for each subregion.
     Parameters:
     scenario (str): Scenario in question
     
     Returns:
-    float: Immediate change in total biomass carbon due to conversion (tCO2e/yr).
+    list: Immediate change in total biomass carbon due to conversion (tCO2e/yr) for each subregion.
     """
     global data
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
-    # Aboveground biomass up to one month after the conversion (tC/ha).
-    agb_month_after = scenario_data.get("agb_month_after")
-    agb_month_after_co2e = convert_to_co2e(agb_month_after)
-
-    # Aboveground biomass before conversion (tC/ha).
-    agb_before = scenario_data.get("agb_before")
-    agb_before_co2e = convert_to_co2e(agb_before)
-
-    # ratio_below_ground_biomass_to_above_ground_biomass (dimensionless).
-    ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
-
-    # Area of land converted in certain year (ha/yr).
-    area_converted_yr = scenario_data.get("area_converted_yr")
-
-    delta_co2_conversion = ((agb_month_after_co2e + (agb_month_after_co2e * ratio)) - (agb_before_co2e + (agb_before_co2e * ratio))) * area_converted_yr
-    return delta_co2_conversion
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    results = []
+    total_delta_co2_conversion = 0
+    total_area = 0
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
+        
+        agb_month_after = scenario_data.get("agb_month_after")
+        agb_month_after_co2e = convert_to_co2e(agb_month_after)
+        
+        agb_before = scenario_data.get("agb_before")
+        agb_before_co2e = convert_to_co2e(agb_before)
+        
+        ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
+        
+        delta_co2_conversion = ((agb_month_after_co2e + (agb_month_after_co2e * ratio)) - 
+                                (agb_before_co2e + (agb_before_co2e * ratio))) * area
+        
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "delta_co2_conversion": delta_co2_conversion
+        })
+        
+        total_delta_co2_conversion += delta_co2_conversion
+        total_area += area
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Immediate change in biomass carbon: {delta_co2_conversion:.2f} tCO2e/yr")
+            print(f"  Area: {area:.2f} ha")
+    
+    average_delta_co2_conversion = total_delta_co2_conversion / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nTotal immediate change in biomass carbon across all subregions: {total_delta_co2_conversion:.2f} tCO2e/yr")
+        print(f"Average immediate change in biomass carbon per hectare: {average_delta_co2_conversion:.2f} tCO2e/ha/yr")
+    
+    return results    
 
 ### Step 6 #### Calculate Annual Decrease in Biomass Stock ####
 #Esimate ∆CL using Equation 2.11: ∆CL = Lwood −removals + Lfuelwood + Ldisturbance
@@ -264,125 +350,222 @@ def estimate_co2_conversion(scenario):
 # Ldisturbance = annual biomass carbon losses due to disturbances, tonnes C yr-1 (See Equation 2.14)
 
 #Defining Lwood-removals equation
-def calculate_lwood_removals(scenario):
+# Lwood-removals equation
+def calculate_lwood_removals(scenario, log_level='info'):
     """
-    Calculate Lwood-removals using the provided equation.
-
+    Calculate Lwood-removals using the provided equation for each subregion.
     Parameters:
     scenario (str): Scenario in question
-
     Returns:
-    float: Annual carbon loss due to wood removals in tCO2e/yr.
+    list: Annual carbon loss due to wood removals in tCO2e/yr for each subregion.
     """
     global data
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
-
-    # Annual wood removal in m3/yr.
-    H = scenario_data.get("H")
-    # Biomass Conversion and Expansion Factor from Table 4.5 in t d.m. removal/m3 removals.
-    BCEFr = scenario_data.get("BCEFr")
-    # Root-to-shoot ratio.
-    ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
-    # Carbon fraction.
-    CF = scenario_data.get("CF")
-
-    if None in [H, BCEFr, ratio, CF]:
-        print(f"Missing data for scenario {scenario}. Please check your data.")
-        return None
-
-
-    return H * BCEFr * (1 + ratio) * CF * (44 / 12)
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    results = []
+    total_lwood_removals = 0
+    total_area = 0
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
+        
+        H = scenario_data.get("H")
+        BCEFr = scenario_data.get("BCEFr")
+        ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
+        CF = scenario_data.get("CF")
+        
+        if None in [H, BCEFr, ratio, CF]:
+            if log_level == 'debug':
+                print(f"Missing data for subregion {aoi_id} in scenario {scenario}. Please check your data.")
+            continue
+        
+        lwood_removals = H * BCEFr * (1 + ratio) * CF * (44 / 12) * (area / scenario_data.get("area_converted_yr", 1))
+        
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "lwood_removals": lwood_removals
+        })
+        
+        total_lwood_removals += lwood_removals
+        total_area += area
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Annual carbon loss due to wood removals: {lwood_removals:.2f} tCO2e/yr")
+            print(f"  Area: {area:.2f} ha")
+    
+    average_lwood_removals = total_lwood_removals / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nTotal annual carbon loss due to wood removals across all subregions: {total_lwood_removals:.2f} tCO2e/yr")
+        print(f"Average annual carbon loss due to wood removals per hectare: {average_lwood_removals:.2f} tCO2e/ha/yr")
+    
+    return results
 
 # Lfuelwood equation
-def calculate_lfuelwood(scenario):
+def calculate_lfuelwood(scenario, log_level='info'):
     """
-    Calculate Lfuelwood using the provided equation.
-
+    Calculate Lfuelwood using the provided equation for each subregion.
     Parameters:
     scenario (str): Scenario in question
-
     Returns:
-    float: Annual biomass carbon loss due to fuelwood removals in tCO2e/yr.
+    list: Annual biomass carbon loss due to fuelwood removals in tCO2e/yr for each subregion.
     """
     global data
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
     
-    # Annual volume of fuelwood removal of whole trees in m3/yr.
-    FGtrees = scenario_data.get("FGtrees")
-    # Annual volume of fuelwood removal of tree parts in m3/yr.
-    FGpart = scenario_data.get("FGpart")
-    # Biomass Conversion and Expansion Factor from Table 4.5 in t biomass removal/m3 removals.
-    BCEFr = scenario_data.get("BCEFr")
-    # Root-to-shoot ratio.
-    ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
-    # Wood density.
-    D = scenario_data.get("D")
-    # Carbon fraction.
-    CF = scenario_data.get("CF")
-
-    # Handling missing data
-    if None in [FGtrees, FGpart, BCEFr, ratio, D, CF]:
-        print(f"Missing data for calculating Lfuelwood. Please check your data for scenario {scenario}.")
-        return None
-
-    # Calculating Lfuelwood based on the provided equation
-    Lfuelwood = ((FGtrees * BCEFr * (1 + ratio)) + FGpart * D) * CF * (44 / 12)
-
-    return Lfuelwood
+    results = []
+    total_lfuelwood = 0
+    total_area = 0
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
+        
+        FGtrees = scenario_data.get("FGtrees")
+        FGpart = scenario_data.get("FGpart")
+        BCEFr = scenario_data.get("BCEFr")
+        ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
+        D = scenario_data.get("D")
+        CF = scenario_data.get("CF")
+        
+        if None in [FGtrees, FGpart, BCEFr, ratio, D, CF]:
+            if log_level == 'debug':
+                print(f"Missing data for calculating Lfuelwood in subregion {aoi_id}. Please check your data for scenario {scenario}.")
+            continue
+        
+        lfuelwood = ((FGtrees * BCEFr * (1 + ratio)) + FGpart * D) * CF * (44 / 12) * (area / scenario_data.get("area_converted_yr", 1))
+        
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "lfuelwood": lfuelwood
+        })
+        
+        total_lfuelwood += lfuelwood
+        total_area += area
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Annual biomass carbon loss due to fuelwood removals: {lfuelwood:.2f} tCO2e/yr")
+            print(f"  Area: {area:.2f} ha")
+    
+    average_lfuelwood = total_lfuelwood / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nTotal annual biomass carbon loss due to fuelwood removals across all subregions: {total_lfuelwood:.2f} tCO2e/yr")
+        print(f"Average annual biomass carbon loss due to fuelwood removals per hectare: {average_lfuelwood:.2f} tCO2e/ha/yr")
+    
+    return results
 
 # Ldisturbance equation
-def calculate_ldisturbance(scenario):
-    """
-    Calculate Ldisturbance using the provided equation.
-
-    Parameters:
-    scenario (str): Scenario in question
-
-    Returns:
-    float: Annual biomass carbon losses due to disturbances in tCO2e/yr.
-    """
+def calculate_ldisturbance(scenario, log_level='info'):
     global data
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
-
-    # Area affected by disturbances in ha/yr.
-    Adisturbance = scenario_data.get("Adisturbance")
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
     
-    # Average AGB of land areas affected by disturbance in tC/ha.
-    Bw = scenario_data.get("Bw")
+    results = []
+    total_ldisturbance = 0
+    total_area = 0
     
-    # Root-to-shoot ratio (dimensionless).
-    ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
+        
+        Adisturbance = scenario_data.get("Adisturbance")
+        Bw = scenario_data.get("Bw")
+        ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
+        fd = scenario_data.get("fd")
+        
+        if None in [Adisturbance, Bw, ratio, fd]:
+            if log_level == 'debug':
+                print(f"Missing data for calculating Ldisturbance in subregion {aoi_id}. Please check your data.")
+            continue
+        
+        ldisturbance = Adisturbance * Bw * (1 + ratio) * fd * (44 / 12) * (area / scenario_data.get("area_converted_yr", 1))
+        
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "ldisturbance": ldisturbance
+        })
+        
+        total_ldisturbance += ldisturbance
+        total_area += area
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Annual biomass carbon losses due to disturbances: {ldisturbance:.2f} tCO2e/yr")
+            print(f"  Area: {area:.2f} ha")
     
-    # Fraction of biomass carbon lost in disturbance (dimensionless).
-    fd = scenario_data.get("fd")
-
-    # Handling missing data
-    if None in [Adisturbance, Bw, ratio, fd]:
-        print("Missing data for calculating Ldisturbance. Please check your data.")
-        return None
-
-    # Calculating Ldisturbance based on the provided equation
-    Ldisturbance = Adisturbance * Bw * (1 + ratio) * fd * (44 / 12)
-
-    return Ldisturbance
+    average_ldisturbance = total_ldisturbance / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nTotal annual biomass carbon losses due to disturbances across all subregions: {total_ldisturbance:.2f} tCO2e/yr")
+        print(f"Average annual biomass carbon losses due to disturbances per hectare: {average_ldisturbance:.2f} tCO2e/ha/yr")
+    
+    return results
 
 #∆CL equation
-def calculate_delta_cl(lwood_removals, lfuelwood, ldisturbance):
+def calculate_delta_cl(lwood_removals_results, lfuelwood_results, ldisturbance_results, log_level='info'):
     """
-    Calculate the change in biomass stock (∆CL).
-
+    Calculate the change in biomass stock (∆CL) for each subregion.
     Parameters:
-    scenario (str): Scenario in question
-    lwood_removals (float): Annual carbon loss due to wood removals in tCO2e/yr.
-    lfuelwood (float): Annual biomass carbon loss due to fuelwood removals in tCO2e/yr.
-    ldisturbance (float): Annual biomass carbon losses due to disturbances in tCO2e/yr.
-
-
+    lwood_removals_results (list): List of dictionaries containing Lwood-removals results for each subregion.
+    lfuelwood_results (list): List of dictionaries containing Lfuelwood results for each subregion.
+    ldisturbance_results (list): List of dictionaries containing Ldisturbance results for each subregion.
+    log_level (str): Logging level. Set to 'debug' for detailed output.
     Returns:
-    float: Change in biomass stock (∆CL) in tCO2e/yr.
+    list: Change in biomass stock (∆CL) in tCO2e/yr for each subregion.
     """
-    # Calculating ΔCL based on the provided equation
-    return lwood_removals + lfuelwood + ldisturbance  
+    results = []
+    total_delta_cl = 0
+    total_area = 0
+
+    # Ensure all input lists have the same length
+    if not (len(lwood_removals_results) == len(lfuelwood_results) == len(ldisturbance_results)):
+        if log_level == 'debug':
+            print("Error: Input lists have different lengths. Please ensure all subregions are represented in each input.")
+        return None
+
+    for lwood, lfuel, ldist in zip(lwood_removals_results, lfuelwood_results, ldisturbance_results):
+        # Ensure we're dealing with the same subregion in all inputs
+        if not (lwood['aoi_id'] == lfuel['aoi_id'] == ldist['aoi_id']):
+            if log_level == 'debug':
+                print(f"Error: Mismatched subregion IDs: {lwood['aoi_id']}, {lfuel['aoi_id']}, {ldist['aoi_id']}")
+            continue
+
+        aoi_id = lwood['aoi_id']
+        area = lwood['area']  # Assuming area is the same in all inputs
+
+        # Calculate ∆CL for the subregion
+        delta_cl = lwood['lwood_removals'] + lfuel['lfuelwood'] + ldist['ldisturbance']
+
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "delta_cl": delta_cl
+        })
+
+        total_delta_cl += delta_cl
+        total_area += area
+
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Change in biomass stock (∆CL): {delta_cl:.2f} tCO2e/yr")
+            print(f"  Area: {area:.2f} ha")
+
+    average_delta_cl = total_delta_cl / total_area if total_area > 0 else 0
+
+    if log_level == 'debug':
+        print(f"\nTotal change in biomass stock (∆CL) across all subregions: {total_delta_cl:.2f} tCO2e/yr")
+        print(f"Average change in biomass stock (∆CL) per hectare: {average_delta_cl:.2f} tCO2e/ha/yr")
+
+    return results  
 
 
 ### Step 7 #### Calculate annual change in carbon stocks in biomass on land converted to other land-use category
@@ -393,184 +576,233 @@ def calculate_delta_cl(lwood_removals, lfuelwood, ldisturbance):
 #∆CL = annual decrease in biomass carbon stocks due to losses from harvesting, fuel wood gathering and disturbances on land converted to other land-use category (tCO2e/yr)
 
 #∆CB Equation
-def calculate_annual_change_in_carbon_stocks(delta_CG, delta_co2_conversion, delta_cl):
+#NOTE: if you want to see the prints of these functions use log_level='debug'
+# def calculate_annual_change_in_carbon_stocks(delta_CG_results, delta_co2_conversion_results, delta_cl_results, log_level='debug'):
+def calculate_annual_change_in_carbon_stocks(delta_CG_results, delta_co2_conversion_results, delta_cl_results, log_level='info'):
     """
-    Calculate the annual change in carbon stocks in biomass on land converted to other land-use category.
-
+    Calculate the annual change in carbon stocks in biomass on land converted to other land-use category for each subregion.
     Parameters:
-    delta_CG (float): Annual increase in carbon stocks in biomass due to growth on land converted to another land-use category (tCO2e/yr)
-    delta_co2_conversion (float): Initial change in carbon stocks in biomass on land converted to other land-use category (tCO2e/yr)
-    delta_cl (float): Annual decrease in biomass carbon stocks due to losses from harvesting, fuel wood gathering and disturbances on land converted to other land-use category (tCO2e/yr)
-
+    delta_CG_results (list): List of dictionaries containing ∆CG results for each subregion.
+    delta_co2_conversion_results (list): List of dictionaries containing ∆CO2-conversion results for each subregion.
+    delta_cl_results (list): List of dictionaries containing ∆CL results for each subregion.
+    log_level (str): Logging level. Set to 'debug' for detailed output.
     Returns:
-    float: Annual change in carbon stocks in biomass on land converted to other land-use category (tCO2e/yr)
+    list: Annual change in carbon stocks in biomass on land converted to other land-use category (tCO2e/yr) for each subregion.
     """
-    return delta_CG + delta_co2_conversion - delta_cl
+    results = []
+    total_annual_change = 0
+    total_area = 0
+
+    # Ensure all input lists have the same length
+    if not (len(delta_CG_results) == len(delta_co2_conversion_results) == len(delta_cl_results)):
+        if log_level == 'debug':
+            print("Error: Input lists have different lengths. Please ensure all subregions are represented in each input.")
+        return None
+
+    for delta_CG, delta_co2_conversion, delta_cl in zip(delta_CG_results, delta_co2_conversion_results, delta_cl_results):
+        # Ensure we're dealing with the same subregion in all inputs
+        if not (delta_CG['aoi_id'] == delta_co2_conversion['aoi_id'] == delta_cl['aoi_id']):
+            if log_level == 'debug':
+                print(f"Error: Mismatched subregion IDs: {delta_CG['aoi_id']}, {delta_co2_conversion['aoi_id']}, {delta_cl['aoi_id']}")
+            continue
+
+        aoi_id = delta_CG['aoi_id']
+        area = delta_CG['area']  # Assuming area is the same in all inputs
+
+        # Calculate annual change for the subregion
+        annual_change = delta_CG['delta_CG'] + delta_co2_conversion['delta_co2_conversion'] - delta_cl['delta_cl']
+
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "annual_change": annual_change
+        })
+
+        total_annual_change += annual_change
+        total_area += area
+
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Annual change in carbon stocks: {annual_change:.2f} tCO2e/yr")
+            print(f"  Area: {area:.2f} ha")
+
+    average_annual_change = total_annual_change / total_area if total_area > 0 else 0
+
+    if log_level == 'debug':
+        print(f"\nTotal annual change in carbon stocks across all subregions: {total_annual_change:.2f} tCO2e/yr")
+        print(f"Average annual change in carbon stocks per hectare: {average_annual_change:.2f} tCO2e/ha/yr")
+
+    return results
 
 
-def calculate_all(scenario):
+def calculate_all(scenario, log_level='info'):
     result = {}
-    average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario)
+    
+    average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario, log_level=log_level)
     result["average_agbd_tco2e"] = average_agbd_tco2e
-
-    mean_annual_tot_c_stock(average_agbd_tco2e, scenario=scenario)
-    result["mean_annual_tot_c_stock"] = mean_annual_tot_c_stock
-
-    delta_CG = calculate_annual_co2_impact(scenario=scenario, years=30)
+    
+    mean_annual_tot_c_stock_result = mean_annual_tot_c_stock(average_agbd_tco2e, scenario=scenario, log_level=log_level)
+    result["mean_annual_tot_c_stock"] = mean_annual_tot_c_stock_result
+    
+    delta_CG = calculate_annual_co2_impact(scenario=scenario, years=30, log_level=log_level)
     result["delta_CG"] = delta_CG
-
-    delta_co2_conversion = estimate_co2_conversion(scenario=scenario)
+    
+    delta_co2_conversion = estimate_co2_conversion(scenario=scenario, log_level=log_level)
     result["delta_co2_conversion"] = delta_co2_conversion
-
+    
     # Calculate Lwood-removals
-    lwood_removals = calculate_lwood_removals(scenario=scenario)
+    lwood_removals = calculate_lwood_removals(scenario=scenario, log_level=log_level)
     result["lwood_removals"] = lwood_removals
-    print(f"Annual biomass carbon loss due to wood removals (Lwood-removals): {lwood_removals} tCO2e/yr")
-
+    if log_level == 'debug':
+        print(f"Annual biomass carbon loss due to wood removals (Lwood-removals): {lwood_removals} tCO2e/yr")
+    
     # Calculate Lfuelwood
-    lfuelwood = calculate_lfuelwood(scenario=scenario)
+    lfuelwood = calculate_lfuelwood(scenario=scenario, log_level=log_level)
     result["lfuelwood"] = lfuelwood
-    print(f"Annual biomass carbon loss due to fuelwood removals (Lfuelwood): {lfuelwood} tCO2e/yr")
-
+    if log_level == 'debug':
+        print(f"Annual biomass carbon loss due to fuelwood removals (Lfuelwood): {lfuelwood} tCO2e/yr")
+    
     # Calculate Ldisturbance
-    ldisturbance = calculate_ldisturbance(scenario=scenario)
+    ldisturbance = calculate_ldisturbance(scenario=scenario, log_level=log_level)
     result["ldisturbance"] = ldisturbance
-    print(f"Annual biomass carbon losses due to disturbances (Ldisturbance): {ldisturbance} tCO2e/yr")
-
+    if log_level == 'debug':
+        print(f"Annual biomass carbon losses due to disturbances (Ldisturbance): {ldisturbance} tCO2e/yr")
+    
     # Calculate ∆CL
-    delta_cl = calculate_delta_cl(lwood_removals, lfuelwood, ldisturbance)
+    delta_cl = calculate_delta_cl(lwood_removals, lfuelwood, ldisturbance, log_level=log_level)
     result["delta_cl"] = delta_cl
-    print(f"Biomass stock Loss (∆CL): {delta_cl} tCO2e/yr")
-
+    if log_level == 'debug':
+        print(f"Biomass stock Loss (∆CL): {delta_cl} tCO2e/yr")
+    
     # Calculate the annual change in carbon stocks
-    annual_change_in_carbon_stocks = calculate_annual_change_in_carbon_stocks(delta_CG, delta_co2_conversion, delta_cl)
+    annual_change_in_carbon_stocks = calculate_annual_change_in_carbon_stocks(delta_CG, delta_co2_conversion, delta_cl, log_level=log_level)
     result["annual_change_in_carbon_stocks"] = annual_change_in_carbon_stocks
-    print(f"Annual change in total biomass carbon stock (∆CB): {annual_change_in_carbon_stocks} tCO2e/yr")
+    if log_level == 'debug':
+        print(f"Annual change in total biomass carbon stock (∆CB): {annual_change_in_carbon_stocks} tCO2e/yr")
     
     return result
 
-bau_result = calculate_all(scenario="business_as_usual")
-print("\n\n")
-inter_result = calculate_all(scenario="intervention")
+biomass = {}
+biomass["business_as_usual"] = calculate_all(scenario="business_as_usual")
+biomass["intervention"] = calculate_all(scenario="intervention")
 
-#### Final biomass CO2 impact ####
-bau_bio_co2 = bau_result["annual_change_in_carbon_stocks"]
-inter_bio_co2 = inter_result["annual_change_in_carbon_stocks"]
-ghg_result = inter_bio_co2 - bau_bio_co2
-ghg_result
+biomass_co2_result = {}
 
-# Load JSON data from a file
-with open('ARR_final_updated.json', 'r') as f:
-    data = json.load(f)
-
-# Extract the "years" variable from the "business_as_usual" and "intervention" scenarios
-years_bau = data["scenarios"]["business_as_usual"][0]["years"]
-years_intervention = data["scenarios"]["intervention"][0]["years"]
-
-print("Years (Business As Usual):", years_bau)
-print("Years (Intervention):", years_intervention)
-
-print(f"The years value is: {years}")
-print(f"Annual biomass CO2 impact (∆CB): {ghg_result} tCO2e/yr in {years_bau} years of intervention")
-
-##### SOIL GHG CALCULATIONS ######
-
-## Getting json data input ##
-# Load data from JSON input
-with open('ARR_final_updated.json') as f:
-    data = json.load(f)
-
-# Extract intervention parameters
-interv_sub = data['intervention_subcategory']  # intervention type
-
-# Convert common scenarios to DataFrame
-common = pd.json_normalize(data['scenarios']['common'])
-
-# Convert business-as-usual scenario to DataFrame
-bau = pd.json_normalize(data['scenarios']['business_as_usual'])
-bau = bau.drop(columns=['aoi_subregions'])
-bau
-
-# Extract AOI subregions for business-as-usual
-bau_aoi = pd.json_normalize(data['scenarios']['business_as_usual'], 'aoi_subregions')
-bau_aoi['aoi_id'] = range(1, len(bau_aoi) + 1)
-bau_aoi
-
-# Combine BAU and AOI subregions
-bau = pd.concat([bau, bau], ignore_index=True)
-bau = pd.concat([bau, bau_aoi], axis=1)
-bau['scenario'] = 'business-as-usual'
-bau
-
-# Convert intervention scenario to DataFrame
-int_df = pd.json_normalize(data['scenarios']['intervention'])
-int_df = int_df.drop(columns=['aoi_subregions'])
-int_df
-
-# Extract AOI subregions for intervention
-int_aoi = pd.json_normalize(data['scenarios']['intervention'], 'aoi_subregions')
-int_aoi['aoi_id'] = range(1, len(int_aoi) + 1)
-int_aoi
-
-# Combine intervention and AOI subregions
-int_df = pd.concat([int_df, int_df], ignore_index=True)
-int_df = pd.concat([int_df, int_aoi], axis=1)
-int_df['scenario'] = 'intervention'
-int_df
-
-# Combine BAU and intervention DataFrames
-df = pd.concat([bau, int_df], ignore_index=True)
-
-# Repeat common scenarios DataFrame for each entry
-common_repeated = pd.concat([common] * len(df), ignore_index=True)
-df = pd.concat([common_repeated, df], axis=1)
-
-# Convert data types appropriately
-df = df.apply(pd.to_numeric, errors='ignore')
-
-# Extract unique AOI identifiers
-AOIs = df['aoi_id'].unique()
-AOIs
-
-# Convert uncertainty values to standard deviation (sd)
-# Uncertainty presented as 95% CI
-unc_low = [col for col in df.columns if re.search("uncertainty_low", col)]
-unc_low_name = df[unc_low].columns
-unc_cols = [re.sub("uncertainty_low.*", "", col) for col in unc_low_name]
-
-for a in unc_cols:
-    df[f"{a}sd"] = (df[f"{a}uncertainty_high"] - df[f"{a}uncertainty_low"]) / 3.92
-
-# Drop columns with "uncertainty" in their name
-df = df[df.columns.drop(list(df.filter(regex='uncertainty')))]
-
-# Uncertainty presented as 95% CI as percentage of mean
-df["SOC_ref_tonnes_C_ha_sd"] = (df["low_activity_clay_soils_LAC_error_positive"] / 100 * df["SOC_ref_tonnes_C_ha"]) / 1.96
-
-# Uncertainty presented as 2 sd as percentage of mean
-df["FMG_sd"] = (df["FMG_error_positive"] / 100 * df["FMG"]) / 2
-df["FI_sd"] = (df["FI_error_positive"] / 100 * df["FI"]) / 2
-
-# Remove other uncertainty columns
-df = df[df.columns.drop(list(df.filter(regex='error')))]
-
-# Display structure of the DataFrame
-print(df.info())
-
-## Soil GHG Calculations ##
-nx=500 # number of Monte Carlo iterations
-
-def GHGcalc(i, df, nx):
-    temp_bau = df[(df['aoi_id'] == i) & (df['scenario'] == 'business-as-usual')]
-    temp_int = df[(df['aoi_id'] == i) & (df['scenario'] == 'intervention')]
-    results_unc = np.zeros((nx, 44))
+for inter_item, bau_item in zip(biomass["intervention"]["annual_change_in_carbon_stocks"], 
+                                biomass["business_as_usual"]["annual_change_in_carbon_stocks"]):
+    if inter_item['aoi_id'] != bau_item['aoi_id']:
+        raise ValueError(f"Mismatched aoi_ids: {inter_item['aoi_id']} and {bau_item['aoi_id']}")
     
-    results_unc[:, 0] = i
-    results_unc[:, 1] = temp_bau['area'].values[0]
-    results_unc[:, 2] = np.arange(1, nx + 1)
+    aoi_id = inter_item['aoi_id']
+    difference = inter_item['annual_change'] - bau_item['annual_change']
+    
+    biomass_co2_result[aoi_id] = difference# inter_result = calculate_all(scenario="intervention")
 
+print(biomass_co2_result)
+
+biomass_co2_result_error_positive = 10  # Assuming this is a percentage
+
+biomass_co2_sd = {}
+
+for aoi_id, difference in biomass_co2_result.items():
+    # Calculate SD for each aoi_id
+    sd = (abs(difference) * biomass_co2_result_error_positive / 100) / 1.96
+    biomass_co2_sd[aoi_id] = sd
+
+############ SOIL GHG CALCULATIONS ##############
+
+## Getting JSON data ready to be calculated ##
+
+# JSON file path - Check the current working directory
+current_directory = os.getcwd()
+print("Current working directory:", current_directory)
+# Define the relative file path
+file_name = 'ARR_final_GHG_calculations.json'
+file_path = os.path.join(current_directory, file_name)
+json_file_path = './ARR_final_GHG_Calculations.json'
+# Load data from the JSON file
+# with open(file_path, 'r') as file:
+#         data = json.load(file)
+
+def load_json_data(file_path):
+    with open(file_path, 'r') as f:
+        json_data = json.load(f)
+    
+    interv_sub = json_data['intervention_subcategory']
+    common = pd.DataFrame(json_data['scenarios']['common'])
+    
+    # Business as usual scenario
+    bau = pd.DataFrame(json_data['scenarios']['business_as_usual'])
+    bau = bau.drop('aoi_subregions', axis=1)
+    bau_aoi = pd.DataFrame(json_data['scenarios']['business_as_usual'][0]['aoi_subregions'])
+    # NOTE: these are not required with the new aoi_id proposed
+    # bau_aoi['aoi_id'] = range(1, len(bau_aoi) + 1)
+    bau = pd.concat([bau] * len(bau_aoi))  # Repeat bau data for each aoi
+    bau = pd.concat([bau.reset_index(drop=True), bau_aoi.reset_index(drop=True)], axis=1)
+    bau['scenario'] = 'business-as-usual'
+    
+    # Intervention scenario
+    int_data = pd.DataFrame(json_data['scenarios']['intervention'])
+    int_data = int_data.drop('aoi_subregions', axis=1)
+    int_aoi = pd.DataFrame(json_data['scenarios']['intervention'][0]['aoi_subregions'])
+    # NOTE: these are not required with the new aoi_id proposed
+    # int_aoi['aoi_id'] = range(1, len(int_aoi) + 1)
+    int_data = pd.concat([int_data] * len(int_aoi))  # Repeat int_data for each aoi
+    int_data = pd.concat([int_data.reset_index(drop=True), int_aoi.reset_index(drop=True)], axis=1)
+    int_data['scenario'] = 'intervention'
+    
+    # Combine all data
+    df = pd.concat([bau, int_data])
+    common = pd.concat([common] * len(df))
+    df = pd.concat([common.reset_index(drop=True), df.reset_index(drop=True)], axis=1)
+    
+    # Convert data types
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='ignore')
+    
+    AOIs = df['aoi_id'].unique()
+    
+    # Convert uncertainty values to sd
+    unc_low_cols = [col for col in df.columns if 'uncertainty_low' in col]
+    unc_cols = [col.replace('_uncertainty_low', '') for col in unc_low_cols]
+    
+    for col in unc_cols:
+        df[f'{col}_sd'] = (df[f'{col}_uncertainty_high'] - df[f'{col}_uncertainty_low']) / 3.92
+
+    print(df)
+    
+    df = df.drop(columns=[col for col in df.columns if 'uncertainty' in col])
+    
+    # Handle specific uncertainty calculations
+    df['SOC_ref_tonnes_C_ha_sd'] = (df['high_activity_clay_soils_HAC_error_positive'] / 100 * df['SOC_ref_tonnes_C_ha']) / 1.96
+    df['FMG_sd'] = (df['FMG_error_positive'] / 100 * df['FMG']) / 2
+    df['FI_sd'] = (df['FI_error_positive'] / 100 * df['FI']) / 2
+    
+    # Remove other uncertainty columns
+    df = df.drop(columns=[col for col in df.columns if 'error' in col])
+    
+    return json_data, df, AOIs, interv_sub
+
+###############################################################
+
+def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
+    
+    temp_bau = df[(df['aoi_id'] == aoi_id) & (df['scenario'] == "business-as-usual")]
+    temp_int = df[(df['aoi_id'] == aoi_id) & (df['scenario'] == "intervention")]
+    # Create a structured array that can hold both strings and floats
+    results_unc = {}
+    
+    results_unc['AOI'] = aoi_id
+    results_unc['Area'] = temp_bau['area'].values[0]
+    results_unc['Rep'] = np.arange(1, nx + 1)
+    results_unc['SOC'] = []
+    results_unc['totalC'] = []
+    results_unc[f'N2O_y{aoi_id}'] = []
+    results_unc[f'CH4_y{aoi_id}'] = []
+     
+  
     for m in range(nx):
-        ####SOC Stock Change####
+        # SOC Stock Change
         SOCREF = np.random.normal(temp_bau['SOC_ref_tonnes_C_ha'].values[0], temp_bau['SOC_ref_tonnes_C_ha_sd'].values[0])
         FLUbau = temp_bau['FLU'].values[0]
         FMGbau = np.random.normal(temp_bau['FMG'].values[0], temp_bau['FMG_sd'].values[0])
@@ -581,15 +813,24 @@ def GHGcalc(i, df, nx):
         SOCbau = SOCREF * FLUbau * FMGbau * FIbau
         SOCint = SOCREF * FLUint * FMGint * FIint
         dSOC = SOCbau - SOCint
-        results_unc[m, 3] = (dSOC * 44 / 12) + ghg_result
+        results_unc["SOC"].append(dSOC)
 
-        ####N2O emissions####
+        # here we add the biomass specific to the aoi_id
+        # NOTE: this number is too large check please
+        results_unc["totalC"].append(dSOC * 44/12 + biomass_co2_result[aoi_id]) 
+
+        # N2O emissions
         # Calculate change in N sources
         FSN = (temp_int['n_fertilizer_amount'].values[0] * temp_int['n_fertilizer_percent'].values[0] / 100 -
-               temp_bau['n_fertilizer_amount'].values[0] * temp_bau['n_fertilizer_percent'].values[0] / 100) if 'nutrient management' in interv_sub else 0
+               temp_bau['n_fertilizer_amount'].values[0] * temp_bau['n_fertilizer_percent'].values[0] / 100) if "nutrient management" in intervention_subcategory else 0
         FON = (temp_int['org_amend_rate'].values[0] * temp_int['org_amend_npercent'].values[0] / 100 -
-               temp_bau['org_amend_rate'].values[0] * temp_bau['org_amend_npercent'].values[0] / 100) if 'nutrient management' in interv_sub else 0
-        FSOM = dSOC / 10 * 1000
+               temp_bau['org_amend_rate'].values[0] * temp_bau['org_amend_npercent'].values[0] / 100) if "nutrient management" in intervention_subcategory else 0
+        FSOM = dSOC / 10 * 1000  # FSOM
+        if "change in livestock type or stocking rate" in intervention_subcategory:
+            FPRP = (temp_int['live_weight'].values[0] * temp_int['Nex'].values[0] * temp_int['stocking_rate'].values[0] -
+                    temp_bau['live_weight'].values[0] * temp_bau['Nex'].values[0] * temp_bau['stocking_rate'].values[0]) / 1000 * 365
+        else:
+            FPRP = 0
 
         # Calculate N emissions
         EFdir = np.random.normal(temp_bau['ef_direct_n2o'].values[0], temp_bau['ef_direct_n2o_sd'].values[0])
@@ -598,117 +839,144 @@ def GHGcalc(i, df, nx):
         EF_vol = np.random.normal(temp_bau['ef_vol'].values[0], temp_bau['ef_vol_sd'].values[0])
         FRAC_LEACH = np.random.normal(temp_bau['frac_leach'].values[0], temp_bau['frac_leach_sd'].values[0])
         EF_leach = np.random.normal(temp_bau['ef_leaching'].values[0], temp_bau['ef_leaching_sd'].values[0])
-        #EF_PRP = np.random.normal(temp_bau['ef_prp'].values[0], temp_bau['ef_prp_sd'].values[0])
-        dirN = (FSN + FON + FSOM) * EFdir
-        volN = (FSN * FRAC_GASF + (FON) * FRAC_GASM) * EF_vol
-        leachN = (FSN + FON + FSOM) * FRAC_LEACH * EF_leach
-        N2O = (dirN + volN + leachN) / 1000 * 44 / 28
-        results_unc[m, 4:24] = N2O
+        EF_PRP = np.random.normal(temp_bau['ef_prp'].values[0], temp_bau['ef_prp_sd'].values[0])
+        dirN = (FSN + FON + FSOM) * EFdir + FPRP * EF_PRP  # Direct emissions
+        volN = (FSN * FRAC_GASF + (FON + FPRP) * FRAC_GASM) * EF_vol  # Indirect volatilization
+        leachN = (FSN + FON + FSOM + FPRP) * FRAC_LEACH * EF_leach  # indirect leaching
+        N2O = (dirN + volN + leachN) / 1000 * 44 / 28  # sum and convert to tN2O
 
+        results_unc[f"N2O_y{aoi_id}"].append(N2O)
+        
+
+        #FIXME: need to incorporeate fire management 
         # Add change in N2O due to fire management
-        if 'change in fire management' in interv_sub:
-            fire_n2o_ef = np.random.normal(temp_bau['burning_n2o_ef_mean'].values[0], temp_bau['burning_n2o_ef_sd'].values[0])
-            if temp_bau['fire_used'].values[0] == 'True':
-                CF_bau = np.random.normal(temp_bau['combustion_factor_mean'].values[0], temp_bau['combustion_factor_sd'].values[0])
-                MB_bau = np.random.normal(temp_bau['fuel_biomass_mean'].values[0], temp_bau['fuel_biomass_sd'].values[0])
-                fireN2O_bau = MB_bau * CF_bau * fire_n2o_ef / 1000
-                results_unc[m, 4] = N2O - fireN2O_bau
-                fire_per_bau = temp_bau['fire_management_years'].values[0]
-                fire_yrs_bau = []
-                for y in range(1, 20):
-                    if y % fire_per_bau == 0:
-                        fire_yrs_bau.append(y)
-                for y in fire_yrs_bau:
-                    results_unc[m, 4 + y] = N2O - fireN2O_bau
+        # if "change in fire management" in intervention_subcategory:
+        #     fire_n2o_ef = np.random.normal(temp_bau['burning_n2o_ef_mean'].values[0], temp_bau['burning_n2o_ef_sd'].values[0])
+        #     # Add fires for bau scenario
+        #     if temp_bau['fire_used'].values[0] == "True":
+        #         CF_bau = np.random.normal(temp_bau['combustion_factor_mean'].values[0], temp_bau['combustion_factor_sd'].values[0])
+        #         MB_bau = np.random.normal(temp_bau['fuel_biomass_mean'].values[0], temp_bau['fuel_biomass_sd'].values[0])
+        #         fireN2O_bau = MB_bau * CF_bau * fire_n2o_ef / 1000
+        #         N2O = N2O - fireN2O_bau
+        #         fire_per_bau = temp_bau['fire_management_years'].values[0]
+        #         fire_yrs_bau = [y for y in range(1, 20) if y % fire_per_bau == 0]
+        #         results_unc[m, 4 + np.array(fire_yrs_bau)] = N2O - fireN2O_bau
+        #     if temp_int['fire_used'].values[0] == "True":
+        #         CF_int = np.random.normal(temp_int['combustion_factor_mean'].values[0], temp_int['combustion_factor_sd'].values[0])
+        #         MB_int = np.random.normal(temp_int['fuel_biomass_mean'].values[0], temp_int['fuel_biomass_sd'].values[0])
+        #         fireN2O_int = MB_int * CF_int * fire_n2o_ef / 1000
+        #         results_unc[m, 4] += fireN2O_int
+        #         fire_per_int = temp_int['fire_management_years'].values[0]
+        #         fire_yrs_int = [y for y in range(1, 20) if y % fire_per_int == 0]
+        #         results_unc[m, 4 + np.array(fire_yrs_int)] += fireN2O_int
 
-            if temp_int['fire_used'].values[0] == 'True':
-                CF_int = np.random.normal(temp_int['combustion_factor_mean'].values[0], temp_int['combustion_factor_sd'].values[0])
-                MB_int = np.random.normal(temp_int['fuel_biomass_mean'].values[0], temp_int['fuel_biomass_sd'].values[0])
-                fireN2O_int = MB_int * CF_int * fire_n2o_ef / 1000
-                results_unc[m, 4] += fireN2O_int
-                fire_per_int = temp_int['fire_management_years'].values[0]
-                fire_yrs_int = []
-                for y in range(1, 20):
-                    if y % fire_per_int == 0:
-                        fire_yrs_int.append(y)
-                for y in fire_yrs_int:
-                    results_unc[m, 4 + y] += fireN2O_int
+        # CH4 emissions
+        # emissions from enteric fermentation (if livestock incorporation)
+        if "change in livestock type or stocking rate" in intervention_subcategory:
+            EF_CH4 = np.random.normal(temp_int['ef_ch4'].values[0], temp_int['ef_ch4'].values[0] * 0.50)
+            CH4_live = (temp_int['stocking_rate'].values[0] - temp_bau['stocking_rate'].values[0]) * EF_CH4 / 1000
+        else:
+            CH4_live = 0
 
-        ####CH4 emissions####
+        results_unc[f"CH4_y{aoi_id}"].append(CH4_live)
+        
+        #FIXME: need to incorporeate fire management 
+        # # emissions from fire management
+        # if "change in fire management" in intervention_subcategory:
+        #     fire_ch4_ef = np.random.normal(temp_bau['burning_ch4_ef_mean'].values[0], temp_bau['burning_ch4_ef_sd'].values[0])
+        #     # Add fires for bau scenario
+        #     if temp_bau['fire_used'].values[0] == "True":
+        #         fireCH4_bau = MB_bau * CF_bau * fire_ch4_ef / 1000
+        #         results_unc[m, 24] = CH4_live - fireCH4_bau
+        #         results_unc[m, 24 + np.array(fire_yrs_bau)] = CH4_live - fireCH4_bau
+        #     if temp_int['fire_used'].values[0] == "True":
+        #         fireCH4_int = MB_int * CF_int * fire_ch4_ef / 1000
+        #         results_unc[m, 24] += fireCH4_int
+        #         results_unc[m, 24 + np.array(fire_yrs_int)] += fireCH4_int
 
-        # Emissions from fire management
-        if 'change in fire management' in interv_sub:
-            fire_ch4_ef = np.random.normal(temp_bau['burning_ch4_ef_mean'].values[0], temp_bau['burning_ch4_ef_sd'].values[0])
-            if temp_bau['fire_used'].values[0] == 'True':
-                fireCH4_bau = MB_bau * CF_bau * fire_ch4_ef / 1000
-                results_unc[m, 24] = CH4_live - fireCH4_bau
-                for y in fire_yrs_bau:
-                    results_unc[m, 24 + y] = CH4_live - fireCH4_bau
 
-            if temp_int['fire_used'].values[0] == 'True':
-                fireCH4_int = MB_int * CF_int * fire_ch4_ef / 1000
-                results_unc[m, 24] += fireCH4_int
-                for y in fire_yrs_int:
-                    results_unc[m, 24 + y] += fireCH4_int
-
-    results_unc_df = pd.DataFrame(results_unc, columns=['AOI', 'Area', 'Rep', 'SOC'] + [f'N2O_y{y}' for y in range(1, 21)] + [f'CH4_y{y}' for y in range(1, 21)])
-    results_unc_df = results_unc_df.apply(pd.to_numeric, errors='coerce')
+    #column_names = ['AOI', 'Area', 'Rep', 'SOC_thayr', 'totalbiomassC_thayr', 'N2O_thayr', 'CH4_thayr}']   #f'N2O_y{aoi_id}', f'CH4_y{aoi_id}
+    results_unc_df = pd.DataFrame(results_unc)
     return results_unc_df
 
-# Extract mean and standard deviation from each subAOI and store in results dataframe
-for i in range(len(AOIs)):
-    mc.append(pd.DataFrame(np.random.randn(20, 44), columns=['Area'] + ['V'+str(i) for i in range(1, 44)]))
 
-# Extract mean and sd from each subAOI and store in results df
-resdf = np.zeros((len(AOIs), 166))
-resdf[:, 0] = AOIs
-columns = ['AOI', 'Area', 'CO2_thayr'] + \
-          [f'N2O_thayr_y{i}' for i in range(1, 21)] + \
-          [f'CH4_thayr_y{i}' for i in range(1, 21)] + \
-          ['sdCO2ha'] + [f'sdN2Oha_y{i}' for i in range(1, 21)] + \
-          [f'sdCH4ha_y{i}' for i in range(1, 21)] + \
-          ['CO2_tyr'] + [f'N2O_tyr_y{i}' for i in range(1, 21)] + \
-          [f'CH4_tyr_y{i}' for i in range(1, 21)] + \
-          ['sdCO2'] + [f'sdN2O_y{i}' for i in range(1, 21)] + \
-          [f'sdCH4_y{i}' for i in range(1, 21)]
-resdf = pd.DataFrame(resdf, columns=columns)
-resdf
-
-for a in range(len(AOIs)):
-    temp_res = mc[a]
-    resdf.at[a, 'Area'] = temp_res['Area'].mean()
-    for z in range(4, 44):
-        resdf.at[a, columns[z-1]] = temp_res.iloc[:, z].mean()
-        resdf.at[a, columns[z+40]] = temp_res.iloc[:, z].std()
-
-for k in range(3, 84):
-    resdf.iloc[:, 82+k] = resdf['Area'] * resdf.iloc[:, k]
-
-resdf = resdf.drop(columns=['Area'])
-
-# Convert to JSON output
-restib = []
-
-for index, row in resdf.iterrows():
-    aoi_tib = {
-        "AOI": f"Sub_AOI-{index+1}",
-        "CO2_thayr": [row['CO2_thayr']] * 20,
-        "sdCO2ha": [row['sdCO2ha']] * 20,
-        "CO2_tyr": [row['CO2_tyr']] * 20,
-        "sdCO2": [row['sdCO2']] * 20,
-        "N2O_thayr": [row[f'N2O_thayr_y{y}'] for y in range(1, 21)],
-        "sdN2Oha": [row[f'sdN2Oha_y{y}'] for y in range(1, 21)],
-        "N2O_tyr": [row[f'N2O_tyr_y{y}'] for y in range(1, 21)],
-        "sdN2O": [row[f'sdN2O_y{y}'] for y in range(1, 21)],
-        "CH4_thayr": [row[f'CH4_thayr_y{y}'] for y in range(1, 21)],
-        "sdCH4ha": [row[f'sdCH4ha_y{y}'] for y in range(1, 21)],
-        "CH4_tyr": [row[f'CH4_tyr_y{y}'] for y in range(1, 21)],
-        "sdCH4": [row[f'sdCH4_y{y}'] for y in range(1, 21)]
-    }
-    restib.append(aoi_tib)
-
-json_output = json.dumps(restib, indent=4)
-with open(f"/Users/barbarabomfim/Dropbox/R/afolu_calc/output/{interv_sub}.json", "w") as f:
-    f.write(json_output)
+def generate_output():
+    global biomass_co2_result
+    json_data, df, AOIs, intervention_subcategory = load_json_data('ARR_final_GHG_Calculations.json')
     
-json_output
+    # Run Monte Carlo simulations
+    np.random.seed(1)
+    mc = [GHGcalc(aoi_id, df, 1000, intervention_subcategory, biomass_co2_result) for aoi_id in AOIs]
+
+
+    # Process results
+    result_list = []
+    for iteration in mc:
+        aoi_id = iteration['AOI'].iloc[0]  # Assuming 'AOI' is constant for each iteration
+        result_dict = {'AOI': aoi_id}
+        
+        for column in iteration.columns:
+            if column in ['AOI', 'Area', 'Rep']:
+                result_dict[column] = iteration[column].iloc[0]  # Assuming these are constant for each iteration
+            else:
+                result_dict[column] = iteration[column].mean()
+                result_dict[column+'_sd'] = iteration[column].std()
+        
+        result_list.append(result_dict)
+
+    # Convert the list of dictionaries to a DataFrame
+    result_df = pd.DataFrame(result_list)
+
+    # Write the DataFrame to a CSV file
+    result_df.to_csv('result.csv', index=False)  
+
+    # column_names = ['AOI', 'Area', 'CO2_thayr'] + \
+    #                [f'N2O_thayr_y{i}' for i in range(1, 21)] + \
+    #                [f'CH4_thayr_y{i}' for i in range(1, 21)] + \
+    #                ['sdCO2ha'] + [f'sdN2Oha_y{i}' for i in range(1, 21)] + \
+    #                [f'sdCH4ha_y{i}' for i in range(1, 21)] + \
+    #                ['CO2_tyr'] + [f'N2O_tyr_y{i}' for i in range(1, 21)] + \
+    #                [f'CH4_tyr_y{i}' for i in range(1, 21)] + \
+    #                ['sdCO2'] + [f'sdN2O_y{i}' for i in range(1, 21)] + \
+    #                [f'sdCH4_y{i}' for i in range(1, 21)]
+    
+    # resdf = pd.DataFrame(resdf, columns=column_names)
+    
+    # # Convert to JSON output
+    # restib = []
+    # for r in range(len(resdf)):
+    #     aoi_dict = {
+    #         'AOI': f'Sub_AOI-{r+1}',
+    #         'CO2_thayr': [resdf.iloc[r]['CO2_thayr']] * 20,
+    #         # NOTE: biomass_co2_sd[aoi_id] gives the sd for biomass_co2_result for that aoi_id
+    #         'sdCO2ha': [resdf.iloc[r]['sdCO2ha']] * 20,
+    #         'CO2_tyr': [resdf.iloc[r]['CO2_tyr']] * 20,
+    #         'sdCO2': [resdf.iloc[r]['sdCO2']] * 20,
+    #         'N2O_thayr': resdf.iloc[r][[f'N2O_thayr_y{i}' for i in range(1, 21)]].tolist(),
+    #         'sdN2Oha': resdf.iloc[r][[f'sdN2Oha_y{i}' for i in range(1, 21)]].tolist(),
+    #         'N2O_tyr': resdf.iloc[r][[f'N2O_tyr_y{i}' for i in range(1, 21)]].tolist(),
+    #         'sdN2O': resdf.iloc[r][[f'sdN2O_y{i}' for i in range(1, 21)]].tolist(),
+    #         'CH4_thayr': resdf.iloc[r][[f'CH4_thayr_y{i}' for i in range(1, 21)]].tolist(),
+    #         'sdCH4ha': resdf.iloc[r][[f'sdCH4ha_y{i}' for i in range(1, 21)]].tolist(),
+    #         'CH4_tyr': resdf.iloc[r][[f'CH4_tyr_y{i}' for i in range(1, 21)]].tolist(),
+    #         'sdCH4': resdf.iloc[r][[f'sdCH4_y{i}' for i in range(1, 21)]].tolist()
+    #     }
+    #     restib.append(aoi_dict)
+# 
+#     
+#     json_output = json.dumps(result, indent=2)
+# 
+#     # Ensure the output directory exists
+      output_dir = 'output'
+      os.makedirs(output_dir, exist_ok=True)
+# 
+#     sanitized = sanitize_filename(f'{intervention_subcategory}.json')
+# 
+#     # Write the JSON output
+     output_file = os.path.join(output_dir, sanitized)
+     with open(output_file, 'w') as f:
+        f.write(json_output)
+# 
+#     print(f"\n\nGenerated file: {sanitized} in the output folder.")
+# 
+generate_output()
