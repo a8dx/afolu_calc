@@ -47,7 +47,7 @@
       #Emissions from fire during land use conversion
           # crop_biomass: Biomass for cropland (t C/ha; if initial land use type = cropland)
           # grass_biomass: Dead organic matter plus live biomass for grassland (t dry matter/ha; if initial land use type = grassland)
-          # forest_biomass: Aboveground forest biomass for natural or plantation forests (if initial land use type; t dry matter/ha)
+          # forest_biomass: Aboveground forest biomass for natural or plantation forests (if initial land use type; t dry matter/ha) ##Lisa, we're using variables called gedi_l4b_agb_mean_total_mg, and gedi_l4b_agb_se_total_mg, for the forest aboveground biomass and standard error. This are going to come from remote sensing and will be part of Step 1, so they'll be printed for each sub-aoi. Units are Mg C for the entire aoi, not per ha. Could you please modify the code to reflect this?##
           # forest_R: Ratio of belowground:aboveground forest biomass for natural or plantation forests (if initial land use type)
           # forest_litter_c: Litter forest C for natural or plantation forests (if initial land use type; t C/ha)
           # forest_deadom_c: Dead forest C for natural or plantation forests (if initial land use type; t C/ha)
