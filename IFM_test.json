@@ -77,6 +77,10 @@
         "LDF_factor_2": "1.7817",
         "ElE_factor_1": "0.4924",
         "ElE_factor_2": "0.0158",
+        "RL": 10,
+        "GR": 1,
+        "BEF":3,
+        "half_life_wp":6,
         "aoi_subregions": [
           {
             "aoi_id": "tropicalmoist_acrisols",
@@ -179,6 +183,10 @@
         "LDF_factor_2": "1.7817",
         "ElE_factor_1": "0.4924",
         "ElE_factor_2": "0.0158",
+        "RL": 15,
+        "GR": 1,
+        "BEF":3,
+        "half_life_wp":6,
         "aoi_subregions": [
           {
             "aoi_id": "tropicalmoist_acrisols",
