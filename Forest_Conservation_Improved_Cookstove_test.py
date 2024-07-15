@@ -57,6 +57,7 @@
 #### Parameters and Paths ####
 # Calculations requires the following parameters and their associated uncertainty:
 
+###CO2
 ##Baselines and Improved Cookstoves
 # "fNRBr"
 # "fNRBu"
@@ -68,15 +69,9 @@
 # "Ybase"
 
 ##N2O
-# burning_n2o_ef: Emissions factor for N2O from burning (g N2O/kg dry matter burnt)
-# combustion_factor: combustion factor for fire
-# fuel_biomass: amount of biomass available for burning (t dry matter/ha)
-# EF_vol: Emissions factor for indirect N2O emissions from volatilization kg N2O-N/(kg NH3-N + NOx-N)
-# FRAC_LEACH: Fraction of N inputs that is lost to leaching (kg N loss/kg N)
-# EF_leach: Emissions factor for indirect N2O emissions from volatilization (kg N2O-N/kg N loss)
-
+# same for CO2
 ##CH4
-# burning_ch4_ef: Emissions factor for CH4 from burning (g CH4/kg dry matter burnt)
+#same for CO2
 
 #### Outputs ####
 # Outputs will be saved to a json file that includes annual CO2, N2O, and CH4 impacts of
@@ -134,80 +129,11 @@ data
 
 ### FCIC CO2 calculations ###
 
-## conect from AGB data from GEE
-def mean_annual_agc_stock(scenario, log_level='info'):
-    global data
-    
-    scenario_data = data["scenarios"][scenario][0]
-    
-    average_agbd_value = average_agbd_dict.get('agbd_mean', 0)
-    area_converted = polygon.area().getInfo()/10000
-    area_converted_yr = float(area_converted)
-    
-    CF = scenario_data["CF"]
-    average_agbd_cstock = convert_to_c(average_agbd_value, CF)
-    average_agbd_tco2e = convert_to_co2e(average_agbd_cstock)
-    
-    if log_level == 'debug':
-        print(f"{area_converted} ha")
-        print(f"Average Aboveground Biomass Density: {average_agbd_value} Mg/ha")
-        print(f"Average Aboveground Carbon Stock: {average_agbd_tco2e} tCO2e/ha")
-    
-    subregion_results = []
-    
-    for subregion in scenario_data["aoi_subregions"]:
-        subregion_area = subregion["area"]
-        subregion_fraction = subregion_area / area_converted_yr
-        
-        subregion_agbd_tco2e = average_agbd_tco2e * subregion_fraction
-        
-        subregion_results.append({
-            "aoi_id": subregion["aoi_id"],
-            "area": subregion_area,
-            "carbon_stock": subregion_agbd_tco2e
-        })
-        
-        if log_level == 'debug':
-            print(f"Subregion {subregion['aoi_id']}: {subregion_agbd_tco2e} tCO2e")
-    
-    return subregion_results
-
-#To have forest AOI carbon stock data - even though not needed in calculations below
-def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
-    global data
-    
-    scenario_data = data["scenarios"][scenario][0]
-    ratio = scenario_data["ratio_below_ground_biomass_to_above_ground_biomass"]
-    
-    total_results = []
-    
-    for subregion in subregion_results:
-        average_agbd_tco2e = subregion["carbon_stock"]
-        
-        average_bgbd_tco2e = convert_to_bgb(average_agbd_tco2e, ratio)
-        average_total_tco2e = average_agbd_tco2e + average_bgbd_tco2e
-        
-        total_results.append({
-            "aoi_id": subregion["aoi_id"],
-            "area": subregion["area"],
-            "aboveground_carbon_stock": average_agbd_tco2e,
-            "belowground_carbon_stock": average_bgbd_tco2e,
-            "total_carbon_stock": average_total_tco2e
-        })
-        
-        if log_level == 'debug':
-            print(f"Subregion {subregion['aoi_id']}:")
-            print(f"  Aboveground Carbon Stock: {average_agbd_tco2e:.2f} tCO2e/ha")
-            print(f"  Belowground Carbon Stock: {average_bgbd_tco2e:.2f} tCO2e/ha")
-            print(f"  Total Carbon Stock: {average_total_tco2e:.2f} tCO2e/ha")
-    
-    return total_results
-
 ####FCIC CALCULATIONS #####################
 ### Step 1: Calculate adjusted fNRB
 
 #Define equation to calculate adjusted fNRB
-def calculate_fNRBadj(total_results, scenario, log_level='info'):
+def calculate_fNRBadj(scenario, log_level='info'):
     global data
     
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
@@ -219,9 +145,13 @@ def calculate_fNRBadj(total_results, scenario, log_level='info'):
         aoi_id = subregion["aoi_id"]
         area = subregion["area"]
     
-        fNRBr = scenario_data.get("fNRBr")
-        fNRBu = scenario_data.get("fNRBu")
-        R = scenario_data.get("R")
+        # fNRBr = scenario_data.get("fNRBr")
+        # fNRBu = scenario_data.get("fNRBu")
+        # R = scenario_data.get("R")
+        
+        fNRBr = float(scenario_data.get("fNRBr", 0))
+        fNRBu = float(scenario_data.get("fNRBu", 0))
+        R = float(scenario_data.get("R", 0))
     
         fNRBadj = fNRBr * R + fNRBu * (1 - R)
     
@@ -236,9 +166,9 @@ def calculate_fNRBadj(total_results, scenario, log_level='info'):
 
     return total_results
 
+##### BASELINE #####
 #Define equation to calculate Non-renewable emissions (NRemissions)
-## Baseline
-def calculate_NRbase_emissions(total_results, scenario, log_level='info'):
+def calculate_NRbase_emissions(scenario, log_level='info'):
     global data
     
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
@@ -250,14 +180,14 @@ def calculate_NRbase_emissions(total_results, scenario, log_level='info'):
         aoi_id = subregion["aoi_id"]
         area = subregion["area"]
     
-        fNRBr = scenario_data.get("fNRBr")
-        fNRBu = scenario_data.get("fNRBu")
-        R = scenario_data.get("R")
-        Bbase = scenario_data.get("Bbase")
-        NCVbase = scenario_data.get("NCVbase")
-        EFdirect_base = scenario_data.get("EFdirect_base")
-        EFkiln_base = scenario_data.get("EFkiln_base")
-        Ybase = scenario_data.get("Ybase")
+        fNRBr = float(scenario_data.get("fNRBr", 0))
+        fNRBu = float(scenario_data.get("fNRBu", 0))
+        R = float(scenario_data.get("R", 0))
+        Bbase = float(scenario_data.get("Bbase", 0))
+        NCVbase = float(scenario_data.get("NCVbase", 0))
+        EFdirect_base = float(scenario_data.get("EFdirect_base", 0))
+        EFkiln_base = float(scenario_data.get("EFkiln_base", 0))
+        Ybase = float(scenario_data.get("Ybase", 0))
     
         fNRBadj = fNRBr * R + fNRBu * (1 - R)
     
@@ -289,9 +219,9 @@ def calculate_NRbase_emissions(total_results, scenario, log_level='info'):
     
     return total_results
 
-
+####### INTERVENTION #####
 #Define equation to calculate the difference in thermal efficiency of baseline and improved stove (Bimpr)
-def calculate_Bimpr(total_results, scenario, log_level='info'):
+def calculate_Bimpr(scenario, log_level='info'):
     global data
     
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
@@ -303,11 +233,11 @@ def calculate_Bimpr(total_results, scenario, log_level='info'):
         aoi_id = subregion["aoi_id"]
         area = subregion["area"]
     
-        Bbase = scenario_data.get("Bbase")
-        NCVbase = scenario_data.get("NCVbase")
-        NCVimpr = scenario_data.get("NCVimpr")
-        nbase = scenario_data.get("nbase")
-        nimpr = scenario_data.get("nimpr")
+        Bbase = float(scenario_data.get("Bbase", 0))
+        NCVbase = float(scenario_data.get("NCVbase", 0))
+        NCVimpr = float(scenario_data.get("NCVimpr", 0))
+        nbase = float(scenario_data.get("nbase", 0))
+        nimpr = float(scenario_data.get("nimpr", 0))
         
         Bimpr = Bbase * (nbase / nimpr) * (NCVbase / NCVimpr)
     
@@ -322,8 +252,7 @@ def calculate_Bimpr(total_results, scenario, log_level='info'):
     return total_results
 
 #Define equation to calculate Non-renewable emissions (NRemissions)
-## Improved coockstoves
-def calculate_NRimpr_emissions(total_results, scenario, log_level='info'):
+def calculate_NRimpr_emissions(scenario, log_level='info'):
     global data
     
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
@@ -331,18 +260,18 @@ def calculate_NRimpr_emissions(total_results, scenario, log_level='info'):
     
     total_results = []
     
-    for subregion in total_results:
+    for subregion in aoi_subregions:
         aoi_id = subregion["aoi_id"]
         area = subregion["area"]
  
-        fNRBr = scenario_data.get("fNRBr")
-        fNRBu = scenario_data.get("fNRBu")
-        R = scenario_data.get("R")
-        Bimpr = subregion["Bimpr"]
-        NCVimpr = scenario_data.get("NCVimpr")
-        EFdirect_impr = scenario_data.get("EFdirect_impr")
-        EFkiln_impr = scenario_data.get("EFkiln_impr")
-        Yimpr = scenario_data.get("Yimpr")
+        fNRBr = float(scenario_data.get("fNRBr", 0))
+        fNRBu = float(scenario_data.get("fNRBu", 0))
+        R = float(scenario_data.get("R", 0))
+        Bimpr = float(subregion.get("Bimpr", 0))
+        NCVimpr = float(scenario_data.get("NCVimpr", 0))
+        EFdirect_impr = float(scenario_data.get("EFdirect_impr", 0))
+        EFkiln_impr = float(scenario_data.get("EFkiln_impr", 0))
+        Yimpr = float(scenario_data.get("Yimpr", 0))
  
         fNRBadj = fNRBr * R + fNRBu * (1 - R)
     
@@ -355,27 +284,24 @@ def calculate_NRimpr_emissions(total_results, scenario, log_level='info'):
         etotal_impr = edirect_impr + ekiln_impr + edamage_impr
     
         total_results.append({
-        "fNRBadj": fNRBadj,
-        "edirect_impr": edirect_impr,
-        "ekiln_impr": ekiln_impr,
-        "edamage_impr": edamage_impr,
-        "etotal_impr": etotal_impr
+            "aoi_id": aoi_id,
+            "area": area,
+            "fNRBadj": fNRBadj,
+            "edirect_impr": edirect_impr,
+            "ekiln_impr": ekiln_impr,
+            "edamage_impr": edamage_impr,
+            "etotal_impr": etotal_impr
         })
         
         if log_level == 'debug':
             print(f"Subregion {aoi_id}:")
             print(f"  Total emissions improved cookstove: {etotal_impr:.2f} tCO2e/y")
     
-    NRemissions_impr = edirect_impr + ekiln_impr + edamage_impr + etotal_impr
-    
-    if log_level == 'debug':
-        # print(f"Subregion {subregion['aoi_id']}:")
-        print(f"Non-renewable cookstove emissions from one household: {NRemissions_impr:.2f} tCO2e/y")
-    
     return total_results
 
-#Define equation to calculate the annual savins in non-renewable CO2 emissions per household
-def calculate_Bimpr(total_results, scenario, log_level='info'):
+#### IMPACT CALCULATION ###
+#Define equation to calculate the annual savings in non-renewable CO2 emissions per household
+def calculate_esave(scenario, log_level='info'):
     global data
     
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
@@ -387,80 +313,167 @@ def calculate_Bimpr(total_results, scenario, log_level='info'):
         aoi_id = subregion["aoi_id"]
         area = subregion["area"]
     
-        Bbase = scenario_data.get("Bbase")
-        NCVbase = scenario_data.get("NCVbase")
-        NCVimpr = scenario_data.get("NCVimpr")
-        nbase = scenario_data.get("nbase")
-        nimpr = scenario_data.get("nimpr")
+        etotal_impr = float(scenario_data.get("etotal_impr", 0))
+        etotal_base = float(scenario_data.get("etotal_base", 0))
+        Disp = float(scenario_data.get("Disp", 0))
         
-        esave = (etotal.base - etotal.impr) * Disp
+        esave = (etotal_base - etotal_impr) * Disp
     
         total_results.append({
-            "Bimpr": Bimpr
+            "esave": esave
         })
         
         if log_level == 'debug':
             print(f"Subregion {aoi_id}:")
-            print(f"  Biomass consumption in improved cookstove: {Bimpr:.2f} t/y")
+            print(f"  Non-renewable emissions for one household: {esave:.2f} tCO2e/y")
+    
+    return total_results
+
+# Define equation to calculate annual activity-wide non-renewable cookstove emissions savings
+def calculate_annual_NR_emissions_savings(scenario, log_level='info'):
+    global data
+    
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    total_results = []
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
+        
+        esave = float(scenario_data.get("esave", 0))
+        H = float(scenario_data.get("H", 0))
+        
+        Esave = esave * H
+        
+        total_results.append({
+            "aoi_id": aoi_id,
+            "Esave": Esave
+        })
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Annual activity-wide savings in non-renewable CO2e emissions: {Esave:.2f} t/y")
     
     return total_results
 
 
-
-
+#Define Total NR emissions savings per activity, cumulative across all years
+def calculate_total_NR_emissions_savings(scenario, log_level='info'):
+    global data
+    
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    total_results = []
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
+        
+        Esave = float(scenario_data.get("Esave", 0))
+        years = float(scenario_data.get("years", 0))
+        
+        Esave_cuml = Esave * years
+        
+        total_results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "Esave_cuml": Esave_cuml
+        })
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Cumulative activity-wide non-renewable CO2e emissions savings: {Esave_cuml:.2f} tCO2e")
+    
+    return total_results
 
 ####### FOREST CONSERVATION BY IMPROVED COOKSTOVE INTERVENTION: Annual CO2 Emissions Calculations #######
 #######FCIC Emissions ###############
 
-def calculate_all_FCIC_bs(scenario):
-    result_bs_FCIC = {}
+def calculate_all(scenario, log_level='info'):
+    result = {}
     
-    fNRBadj = calculate_fNRBadj(scenario=scenario)
-    result_bs_FCIC["fNRBadj"] = fNRBadj
+    fNRBadj = calculate_fNRBadj(scenario=scenario, log_level=log_level)
+    result["fNRBadj"] = fNRBadj
+    if log_level == 'debug':
+        print(f"adjusted fNRB: {fNRBadj} %r")
     
-    etotal_base_d = calculate_baseline_emissions(scenario=scenario)
-    result_bs_FCIC["etotal_base_d"] = etotal_base_d
+    NRemissions_base = calculate_NRbase_emissions(scenario=scenario, log_level=log_level)
+    result["NRemissions_base"] = NRemissions_base
+    if log_level == 'debug':
+        print(f"Non-renewable emission under baseline scenario: {NRemissions_base} %r")
+    
+    Bimpr = calculate_Bimpr(scenario=scenario, log_level=log_level)
+    result["Bimpr"] = Bimpr
+    if log_level == 'debug':
+        print(f"Annual consumption of biomass per household for cooking under the project scenario: {Bimpr} tCO2e/yr")
 
-    return result_bs_FCIC
+    NRemissions_impr = calculate_NRimpr_emissions(scenario=scenario, log_level=log_level)
+    result["NRemissions_impr"] = NRemissions_impr
+    if log_level == 'debug':
+        print(f"Non-renewable emission under baseline scenario: {NRemissions_impr} tCO2e/yr")
+    
+    e_save = calculate_esave(scenario=scenario, log_level=log_level)
+    result["e_save"] = e_save
+    if log_level == 'debug':
+        print(f"Annual savings in non-renewable CO2e emissions from a single household: {e_save} tCO2e/yr")
+    
+    Esave = calculate_annual_NR_emissions_savings(scenario=scenario, log_level=log_level)
+    result["Esave"] = Esave
+    if log_level == 'debug':
+        print(f"Per-household NR emissions savings are scaled up to the activity: {Esave} tCO2e/y")
+    
+    Esave_cuml = calculate_total_NR_emissions_savings(scenario=scenario, log_level=log_level)
+    result["Esave_cuml"] = Esave_cuml
+    if log_level == 'debug':
+        print(f"Total cumulative intervention impact: {Esave_cuml} tCO2e")
+    
+    return result
 
-bau_result_bs_FCIC = calculate_all_FCIC_bs(scenario="business_as_usual")
-bau_result_bs_FCIC["etotal_base_d"]
-print(f'Annual Baseline CO2e emissions (CO2_thayr): {bau_result_bs_FCIC["etotal_base_d"]}')
+bau_result = calculate_all(scenario="business_as_usual")
+int_result = calculate_all(scenario="intervention")
+int_result["Esave"]
+print(f'Annual CO2e emissions from improved cookstoce intervention (CO2_tyr): {bau_result["Esave"]}')
+
+int_result["Esave_cuml"]
+print(f'Annual CO2e emissions from improved cookstoce intervention (CO2_t): {bau_result["Esave"]}')
 
 
 ###### FCIC CO2 IMPACT  ########
 ### Calculate difference between intervention and business_as_usual
 
-biomass = {}
-biomass["business_as_usual"] = calculate_all(scenario="business_as_usual")
-biomass["intervention"] = calculate_all(scenario="intervention")
+fcic = {}
+fcic["business_as_usual"] = calculate_all(scenario="business_as_usual")
+fcic["intervention"] = calculate_all(scenario="intervention")
 
-biomass_co2_result = {}
+fcic_co2_result = {}
 
-for inter_item, bau_item in zip(biomass["intervention"]["yearly_avoided_emissions_trees"], 
-                                biomass["business_as_usual"]["yearly_avoided_emissions_trees"]):
+for inter_item, bau_item in zip(fcic["intervention"]["Esave"], 
+                                fcic["business_as_usual"]["Esave"]):
     if inter_item['aoi_id'] != bau_item['aoi_id']:
         raise ValueError(f"Mismatched aoi_ids: {inter_item['aoi_id']} and {bau_item['aoi_id']}")
     
     aoi_id = inter_item['aoi_id']
-    difference = inter_item['annual_change'] - bau_item['annual_change']
+    difference = inter_item['Esave'] - bau_item['Esave']
     
-    biomass_co2_result[aoi_id] = difference# inter_result = calculate_all(scenario="intervention")
+    fcic_co2_result[aoi_id] = difference# inter_result = calculate_all(scenario="intervention")
 
-print(biomass_co2_result)
+print(fcic_co2_result)
 
-biomass_co2_result_error_positive = 10  # this is a percentage
+fcic_co2_result_error_positive = 10  # this is a percentage
 
-biomass_co2_sd = {}
+fcic_co2_sd = {}
 
-for aoi_id, difference in biomass_co2_result.items():
+for aoi_id, difference in fcic_co2_result.items():
     # Calculate SD for each aoi_id
-    sd = (abs(difference) * biomass_co2_result_error_positive / 100) / 1.96
-    biomass_co2_sd[aoi_id] = sd
+    sd = (abs(difference) * fcic_co2_result_error_positive / 100) / 1.96
+    fcic_co2_sd[aoi_id] = sd
 
 ######## GHG CALCULATIONS #########
 
-## Getting JSON data ready to be calculated ##
+####### Getting JSON data ready to be calculated ######
 def load_json_data(file_path):
     with open(file_path, 'r') as f:
         json_data = json.load(f)
@@ -520,7 +533,9 @@ def load_json_data(file_path):
     
     return json_data, df, AOIs, interv_sub
 
-def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
+
+### Calculations function #####
+def GHGcalc(aoi_id, df, nx, intervention_subcategory, fcic_co2_result):
     
     temp_bau = df[(df['aoi_id'] == aoi_id) & (df['scenario'] == "business-as-usual")]
     temp_int = df[(df['aoi_id'] == aoi_id) & (df['scenario'] == "intervention")]
@@ -537,48 +552,48 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
      
     
     for m in range(nx):
-        # SOC Stock Change
-        SOCREF = np.random.normal(temp_bau['SOC_ref_tonnes_C_ha'].values[0], temp_bau['SOC_ref_tonnes_C_ha_sd'].values[0])
-        FLUbau = temp_bau['FLU'].values[0]
-        FMGbau = np.random.normal(temp_bau['FMG'].values[0], temp_bau['FMG_sd'].values[0])
-        FIbau = np.random.normal(temp_bau['FI'].values[0], temp_bau['FI_sd'].values[0])
-        FLUint = temp_int['FLU'].values[0]
-        FMGint = np.random.normal(temp_int['FMG'].values[0], temp_int['FMG_sd'].values[0])
-        FIint = np.random.normal(temp_int['FI'].values[0], temp_int['FI_sd'].values[0])
-        SOCbau = SOCREF * FLUbau * FMGbau * FIbau
-        SOCint = SOCREF * FLUint * FMGint * FIint
-        dSOC = SOCbau - SOCint
-        results_unc["SOC"].append(dSOC)
+        # # SOC Stock Change
+        # SOCREF = np.random.normal(temp_bau['SOC_ref_tonnes_C_ha'].values[0], temp_bau['SOC_ref_tonnes_C_ha_sd'].values[0])
+        # FLUbau = temp_bau['FLU'].values[0]
+        # FMGbau = np.random.normal(temp_bau['FMG'].values[0], temp_bau['FMG_sd'].values[0])
+        # FIbau = np.random.normal(temp_bau['FI'].values[0], temp_bau['FI_sd'].values[0])
+        # FLUint = temp_int['FLU'].values[0]
+        # FMGint = np.random.normal(temp_int['FMG'].values[0], temp_int['FMG_sd'].values[0])
+        # FIint = np.random.normal(temp_int['FI'].values[0], temp_int['FI_sd'].values[0])
+        # SOCbau = SOCREF * FLUbau * FMGbau * FIbau
+        # SOCint = SOCREF * FLUint * FMGint * FIint
+        # dSOC = SOCbau - SOCint
+        # results_unc["SOC"].append(dSOC)
+        # 
+        # # here we add the biomass specific to the aoi_id
+        # # NOTE: this number is too large check please
+        # results_unc["totalC"].append(dSOC * 44/12 + fcic_co2_result[aoi_id]) 
 
-        # here we add the biomass specific to the aoi_id
-        # NOTE: this number is too large check please
-        results_unc["totalC"].append(dSOC * 44/12 + biomass_co2_result[aoi_id]) 
-
-        # N2O emissions
-        # Calculate change in N sources
-        FSN = (temp_int['n_fertilizer_amount'].values[0] * temp_int['n_fertilizer_percent'].values[0] / 100 -
-               temp_bau['n_fertilizer_amount'].values[0] * temp_bau['n_fertilizer_percent'].values[0] / 100) if "nutrient management" in intervention_subcategory else 0
-        FON = (temp_int['org_amend_rate'].values[0] * temp_int['org_amend_npercent'].values[0] / 100 -
-               temp_bau['org_amend_rate'].values[0] * temp_bau['org_amend_npercent'].values[0] / 100) if "nutrient management" in intervention_subcategory else 0
-        FSOM = dSOC / 10 * 1000  # FSOM
-        if "change in livestock type or stocking rate" in intervention_subcategory:
-            FPRP = (temp_int['live_weight'].values[0] * temp_int['Nex'].values[0] * temp_int['stocking_rate'].values[0] -
-                    temp_bau['live_weight'].values[0] * temp_bau['Nex'].values[0] * temp_bau['stocking_rate'].values[0]) / 1000 * 365
-        else:
-            FPRP = 0
-
-        # Calculate N emissions
-        EFdir = np.random.normal(temp_bau['ef_direct_n2o'].values[0], temp_bau['ef_direct_n2o_sd'].values[0])
-        FRAC_GASF = np.random.normal(temp_bau['frac_syn_fert'].values[0], temp_bau['frac_syn_fert_sd'].values[0])
-        FRAC_GASM = np.random.normal(temp_bau['frac_org_fert'].values[0], temp_bau['frac_org_fert_sd'].values[0])
-        EF_vol = np.random.normal(temp_bau['ef_vol'].values[0], temp_bau['ef_vol_sd'].values[0])
-        FRAC_LEACH = np.random.normal(temp_bau['frac_leach'].values[0], temp_bau['frac_leach_sd'].values[0])
-        EF_leach = np.random.normal(temp_bau['ef_leaching'].values[0], temp_bau['ef_leaching_sd'].values[0])
-        EF_PRP = np.random.normal(temp_bau['ef_prp'].values[0], temp_bau['ef_prp_sd'].values[0])
-        dirN = (FSN + FON + FSOM) * EFdir + FPRP * EF_PRP  # Direct emissions
-        volN = (FSN * FRAC_GASF + (FON + FPRP) * FRAC_GASM) * EF_vol  # Indirect volatilization
-        leachN = (FSN + FON + FSOM + FPRP) * FRAC_LEACH * EF_leach  # indirect leaching
-        N2O = (dirN + volN + leachN) / 1000 * 44 / 28  # sum and convert to tN2O
+        # # N2O emissions
+        # # Calculate change in N sources
+        # FSN = (temp_int['n_fertilizer_amount'].values[0] * temp_int['n_fertilizer_percent'].values[0] / 100 -
+        #        temp_bau['n_fertilizer_amount'].values[0] * temp_bau['n_fertilizer_percent'].values[0] / 100) if "nutrient management" in intervention_subcategory else 0
+        # FON = (temp_int['org_amend_rate'].values[0] * temp_int['org_amend_npercent'].values[0] / 100 -
+        #        temp_bau['org_amend_rate'].values[0] * temp_bau['org_amend_npercent'].values[0] / 100) if "nutrient management" in intervention_subcategory else 0
+        # FSOM = dSOC / 10 * 1000  # FSOM
+        # if "change in livestock type or stocking rate" in intervention_subcategory:
+        #     FPRP = (temp_int['live_weight'].values[0] * temp_int['Nex'].values[0] * temp_int['stocking_rate'].values[0] -
+        #             temp_bau['live_weight'].values[0] * temp_bau['Nex'].values[0] * temp_bau['stocking_rate'].values[0]) / 1000 * 365
+        # else:
+        #     FPRP = 0
+        # 
+        # # Calculate N emissions
+        # EFdir = np.random.normal(temp_bau['ef_direct_n2o'].values[0], temp_bau['ef_direct_n2o_sd'].values[0])
+        # FRAC_GASF = np.random.normal(temp_bau['frac_syn_fert'].values[0], temp_bau['frac_syn_fert_sd'].values[0])
+        # FRAC_GASM = np.random.normal(temp_bau['frac_org_fert'].values[0], temp_bau['frac_org_fert_sd'].values[0])
+        # EF_vol = np.random.normal(temp_bau['ef_vol'].values[0], temp_bau['ef_vol_sd'].values[0])
+        # FRAC_LEACH = np.random.normal(temp_bau['frac_leach'].values[0], temp_bau['frac_leach_sd'].values[0])
+        # EF_leach = np.random.normal(temp_bau['ef_leaching'].values[0], temp_bau['ef_leaching_sd'].values[0])
+        # EF_PRP = np.random.normal(temp_bau['ef_prp'].values[0], temp_bau['ef_prp_sd'].values[0])
+        # dirN = (FSN + FON + FSOM) * EFdir + FPRP * EF_PRP  # Direct emissions
+        # volN = (FSN * FRAC_GASF + (FON + FPRP) * FRAC_GASM) * EF_vol  # Indirect volatilization
+        # leachN = (FSN + FON + FSOM + FPRP) * FRAC_LEACH * EF_leach  # indirect leaching
+        # N2O = (dirN + volN + leachN) / 1000 * 44 / 28  # sum and convert to tN2O
 
         results_unc[f"N2O_{aoi_id}"].append(N2O)
         
@@ -604,35 +619,19 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
         #         fire_yrs_int = [y for y in range(1, 20) if y % fire_per_int == 0]
         #         results_unc[m, 4 + np.array(fire_yrs_int)] += fireN2O_int
 
-        
-        #FIXME: add if incorporating fire
-        # # emissions from fire management
-        # if "change in fire management" in intervention_subcategory:
-        #     fire_ch4_ef = np.random.normal(temp_bau['burning_ch4_ef_mean'].values[0], temp_bau['burning_ch4_ef_sd'].values[0])
-        #     # Add fires for bau scenario
-        #     if temp_bau['fire_used'].values[0] == "True":
-        #         fireCH4_bau = MB_bau * CF_bau * fire_ch4_ef / 1000
-        #         results_unc[m, 24] = CH4_live - fireCH4_bau
-        #         results_unc[m, 24 + np.array(fire_yrs_bau)] = CH4_live - fireCH4_bau
-        #     if temp_int['fire_used'].values[0] == "True":
-        #         fireCH4_int = MB_int * CF_int * fire_ch4_ef / 1000
-        #         results_unc[m, 24] += fireCH4_int
-        #         results_unc[m, 24 + np.array(fire_yrs_int)] += fireCH4_int
-
 
     # column_names = ['AOI', 'Area', 'Rep', 'SOC', 'totalC', f'N2O_y{aoi_id}', f'CH4_y{aoi_id}']
     results_unc_df = pd.DataFrame(results_unc)
     return results_unc_df
 
-
+###### Generating Output ####
 def generate_output():
-    global biomass_co2_result
-    json_data, df, AOIs, intervention_subcategory = load_json_data('FP_test.json')
+    global fcic_co2_result
+    json_data, df, AOIs, intervention_subcategory = load_json_data('FCIC_test.json')
     
     # Run Monte Carlo simulations
     np.random.seed(1)
-    mc = [GHGcalc(aoi_id, df, 1000, intervention_subcategory, biomass_co2_result) for aoi_id in AOIs]
-
+    mc = [GHGcalc(aoi_id, df, 1000, intervention_subcategory, fcic_co2_result) for aoi_id in AOIs]
 
     # Process results
     result_list = []
@@ -649,7 +648,6 @@ def generate_output():
         
         result_list.append(result_dict)
 
-
     # Convert the list of dictionaries to a DataFrame
     result_df = pd.DataFrame(result_list)
 
@@ -664,6 +662,7 @@ def generate_output():
     #    'CH4_tropicalmoist_ferralsols', 'CH4_tropicalmoist_ferralsols_sd'],
     #   dtype='object')
     
+    ## FIX ME - Redo this sum of columns
     # Summing specific columns
     result_df['N2O_thayr'] = result_df['N2O_tropicalmoist_acrisols'] + result_df['N2O_tropicalmoist_ferralsols']
     result_df['sdN2Oha'] = result_df['N2O_tropicalmoist_acrisols_sd'] + result_df['N2O_tropicalmoist_ferralsols_sd']
@@ -699,7 +698,7 @@ def generate_output():
 
     print(result_df)
     # 
-    #NOTE: this is creating all the columns only with projections from year 1 up to you year 20
+    #NOTE: this is creating all the columns only with projections from year 1 up to year 20
     column_names = ['AOI', 'Area', 'CO2_thayr'] + \
                    [f'N2O_thayr_y{i}' for i in range(1, 21)] + \
                    [f'CH4_thayr_y{i}' for i in range(1, 21)] + \
@@ -762,7 +761,3 @@ def generate_output():
     #print(f"\n\nGenerated file: {sanitized_filename} in the output folder.")
 
 generate_output()
-
-
-
-
