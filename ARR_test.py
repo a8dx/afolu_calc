@@ -1,5 +1,3 @@
-## Python Code Afforestation/Reforestation Calculations
-
 # /***********************************************************************************************************
 #   Copyright © 2024 Mathematica, Inc. This software was developed by Mathematica as part of the AFOLU GHG Calculator 
 # project funded by USAID through Contract No. 51964. This code cannot be copied, distributed or used without 
@@ -7,7 +5,7 @@
 # ***********************************************************************************************************/
 
 # /**********************************************************************************************************
-# Filename: sample_ARR_gee-agb_GHG-calculations_updated.py
+# Filename: ARR_test.py
 # Author: Barbara Bomfim
 # Date Started: 06/28/2024
 # Last Edited: 07/15/2024
