@@ -10,7 +10,7 @@
 # Filename: sample_ARR_gee-agb_GHG-calculations_updated.py
 # Author: Barbara Bomfim
 # Date Started: 06/28/2024
-# Last Edited: 07/14/2024
+# Last Edited: 07/15/2024
 # Purpose: AFOLU GHG Calculations for Afforestation/Reforestation (A/R) Interventions
 # **********************************************************************************************************/
 
@@ -70,7 +70,7 @@
 # burning_ch4_ef: Emissions factor for CH4 from burning (g CH4/kg dry matter burnt)
 
 #### Outputs ####
-# Outputs saved to a json file that includes annual CO2, N2O, and CH4 impacts of
+# Outputs will be saved to a json file that includes annual CO2, N2O, and CH4 impacts of
 #    the intervention on both a per hectare and total area basis for each subAOI over a 20 year period.
 #    The json file will have the following format:
 # [
@@ -104,7 +104,7 @@ from concurrent.futures import ProcessPoolExecutor
 import ee
 import re
 
-from helpersARR_final import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_stock, sanitize_filename
+from helpersARRfinal import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_stock, sanitize_filename
 
 
 ### STEP 1 - Estimate mean annual AGB (in Mg/ha) using GEDI dataset ####
@@ -155,14 +155,14 @@ print(f"{polygon.area().getInfo()/10000} ha") # to get area in hectares
 current_directory = os.getcwd()
 print("Current working directory:", current_directory)
 # Define the relative file path
-file_name = 'ARR_final_GHG_calculations.json'
+file_name = 'ARR_final_GHG_Calculations.json'
 file_path = os.path.join(current_directory, file_name)
 json_file_path = './ARR_final_GHG_Calculations.json'
 # Load data from the JSON file
 with open(file_path, 'r') as file:
         data = json.load(file)
 
-#### STEP 2 - Calculate mean annual AGC stock in tCO2e/ha ####
+### STEP 2 - Calculate mean annual AGC stock in tCO2e/ha####
 
 def mean_annual_agc_stock(scenario, log_level='info'):
     global data
@@ -199,6 +199,7 @@ def mean_annual_agc_stock(scenario, log_level='info'):
             print(f"Subregion {subregion['aoi_id']}: {subregion_agbd_tco2e} tCO2e")
     
     return subregion_results
+
 
 ### STEP 3 - Calculate mean annual Total C stock (sum AGC and BGC) ####
 
@@ -634,7 +635,7 @@ def calculate_annual_change_in_carbon_stocks(delta_CG_results, delta_co2_convers
 
     return results
 
-
+####### Calculate all ARR variables ####
 def calculate_all(scenario, log_level='info'):
     result = {}
     
@@ -709,21 +710,9 @@ for aoi_id, difference in biomass_co2_result.items():
     sd = (abs(difference) * biomass_co2_result_error_positive / 100) / 1.96
     biomass_co2_sd[aoi_id] = sd
 
-############ SOIL GHG CALCULATIONS ##############
+## SOIL GHG CALCULATIONS ###
 
 ## Getting JSON data ready to be calculated ##
-
-# JSON file path - Check the current working directory
-current_directory = os.getcwd()
-print("Current working directory:", current_directory)
-# Define the relative file path
-file_name = 'ARR_final_GHG_calculations.json'
-file_path = os.path.join(current_directory, file_name)
-json_file_path = './ARR_final_GHG_Calculations.json'
-# Load data from the JSON file
-# with open(file_path, 'r') as file:
-#         data = json.load(file)
-
 def load_json_data(file_path):
     with open(file_path, 'r') as f:
         json_data = json.load(f)
@@ -797,10 +786,10 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
     results_unc['Rep'] = np.arange(1, nx + 1)
     results_unc['SOC'] = []
     results_unc['totalC'] = []
-    results_unc[f'N2O_y{aoi_id}'] = []
-    results_unc[f'CH4_y{aoi_id}'] = []
+    results_unc[f'N2O_{aoi_id}'] = []
+    results_unc[f'CH4_{aoi_id}'] = []
      
-  
+    
     for m in range(nx):
         # SOC Stock Change
         SOCREF = np.random.normal(temp_bau['SOC_ref_tonnes_C_ha'].values[0], temp_bau['SOC_ref_tonnes_C_ha_sd'].values[0])
@@ -845,9 +834,8 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
         leachN = (FSN + FON + FSOM + FPRP) * FRAC_LEACH * EF_leach  # indirect leaching
         N2O = (dirN + volN + leachN) / 1000 * 44 / 28  # sum and convert to tN2O
 
-        results_unc[f"N2O_y{aoi_id}"].append(N2O)
+        results_unc[f"N2O_{aoi_id}"].append(N2O)
         
-
         #FIXME: need to incorporeate fire management 
         # Add change in N2O due to fire management
         # if "change in fire management" in intervention_subcategory:
@@ -870,15 +858,6 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
         #         fire_yrs_int = [y for y in range(1, 20) if y % fire_per_int == 0]
         #         results_unc[m, 4 + np.array(fire_yrs_int)] += fireN2O_int
 
-        # CH4 emissions
-        # emissions from enteric fermentation (if livestock incorporation)
-        if "change in livestock type or stocking rate" in intervention_subcategory:
-            EF_CH4 = np.random.normal(temp_int['ef_ch4'].values[0], temp_int['ef_ch4'].values[0] * 0.50)
-            CH4_live = (temp_int['stocking_rate'].values[0] - temp_bau['stocking_rate'].values[0]) * EF_CH4 / 1000
-        else:
-            CH4_live = 0
-
-        results_unc[f"CH4_y{aoi_id}"].append(CH4_live)
         
         #FIXME: need to incorporeate fire management 
         # # emissions from fire management
@@ -895,7 +874,7 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
         #         results_unc[m, 24 + np.array(fire_yrs_int)] += fireCH4_int
 
 
-    #column_names = ['AOI', 'Area', 'Rep', 'SOC_thayr', 'totalbiomassC_thayr', 'N2O_thayr', 'CH4_thayr}']   #f'N2O_y{aoi_id}', f'CH4_y{aoi_id}
+    # column_names = ['AOI', 'Area', 'Rep', 'SOC', 'totalC', f'N2O_y{aoi_id}', f'CH4_y{aoi_id}']
     results_unc_df = pd.DataFrame(results_unc)
     return results_unc_df
 
@@ -924,59 +903,116 @@ def generate_output():
         
         result_list.append(result_dict)
 
+
     # Convert the list of dictionaries to a DataFrame
     result_df = pd.DataFrame(result_list)
 
-    # Write the DataFrame to a CSV file
-    result_df.to_csv('result.csv', index=False)  
+    print(result_df.columns)
 
-    # column_names = ['AOI', 'Area', 'CO2_thayr'] + \
-    #                [f'N2O_thayr_y{i}' for i in range(1, 21)] + \
-    #                [f'CH4_thayr_y{i}' for i in range(1, 21)] + \
-    #                ['sdCO2ha'] + [f'sdN2Oha_y{i}' for i in range(1, 21)] + \
-    #                [f'sdCH4ha_y{i}' for i in range(1, 21)] + \
-    #                ['CO2_tyr'] + [f'N2O_tyr_y{i}' for i in range(1, 21)] + \
-    #                [f'CH4_tyr_y{i}' for i in range(1, 21)] + \
-    #                ['sdCO2'] + [f'sdN2O_y{i}' for i in range(1, 21)] + \
-    #                [f'sdCH4_y{i}' for i in range(1, 21)]
+    # result_df has the following columns with aoi_id baked in
+    # TODO: Need to roll them up for totals as well instead of aoi_id
+    # Index(['AOI', 'Area', 'Rep', 'SOC', 'SOC_sd', 'totalC', 'totalC_sd',
+    #    'N2O_tropicalmoist_acrisols', 'N2O_tropicalmoist_acrisols_sd',
+    #    'CH4_tropicalmoist_acrisols', 'CH4_tropicalmoist_acrisols_sd',
+    #    'N2O_tropicalmoist_ferralsols', 'N2O_tropicalmoist_ferralsols_sd',
+    #    'CH4_tropicalmoist_ferralsols', 'CH4_tropicalmoist_ferralsols_sd'],
+    #   dtype='object')
     
-    # resdf = pd.DataFrame(resdf, columns=column_names)
-    
+    # Summing specific columns
+    result_df['N2O_thayr'] = result_df['N2O_tropicalmoist_acrisols'] + result_df['N2O_tropicalmoist_ferralsols']
+    result_df['sdN2Oha'] = result_df['N2O_tropicalmoist_acrisols_sd'] + result_df['N2O_tropicalmoist_ferralsols_sd']
+    result_df['CH4_thayr'] = result_df['CH4_tropicalmoist_acrisols'] + result_df['CH4_tropicalmoist_ferralsols']
+    result_df['sdCH4ha'] = result_df['CH4_tropicalmoist_acrisols_sd'] + result_df['CH4_tropicalmoist_ferralsols_sd']
+    result_df['CO2_thayr'] = result_df['SOC'] + result_df['totalC']
+    result_df['sdCO2ha'] = result_df['SOC_sd'] + result_df['totalC_sd']
+    result_df['CO2_tyr'] = result_df['CO2_thayr'] * result_df['Area']
+    result_df['sdCO2'] = result_df['sdCO2ha'] * result_df['Area']
+    result_df['N2O_tyr'] = result_df['N2O_thayr'] * result_df['Area']
+    result_df['sdN2O'] = result_df['sdN2Oha'] * result_df['Area']
+    result_df['CH4_tyr'] = result_df['CH4_thayr'] * result_df['Area']
+    result_df['sdCH4'] = result_df['sdCH4ha'] * result_df['Area']
+
+    # Drop the individual columns after summing
+    result_df = result_df.drop(columns=[
+        'SOC', 'totalC', 'SOC_sd', 'totalC_sd',
+        'N2O_tropicalmoist_acrisols', 'N2O_tropicalmoist_ferralsols',
+        'N2O_tropicalmoist_acrisols_sd', 'N2O_tropicalmoist_ferralsols_sd',
+        'CH4_tropicalmoist_acrisols', 'CH4_tropicalmoist_ferralsols',
+        'CH4_tropicalmoist_acrisols_sd', 'CH4_tropicalmoist_ferralsols_sd'
+    ])
+
+    # Aggregate the DataFrame by summing up the columns
+    totals = result_df.sum(numeric_only=True).to_frame().transpose()
+    totals['AOI'] = 'Total'
+    totals['Rep'] = 'Total'
+    result_df = result_df.append(totals, ignore_index=True)
+
+    # Reorder columns to place 'AOI' first
+    cols = ['AOI', 'Rep'] + [col for col in result_df.columns if col not in ['AOI', 'Rep']]
+    result_df = result_df[cols]
+
+    print(result_df)
+    # 
+    #NOTE: this is creating all the columns only with projections from year 1 up to you year 20
+    column_names = ['AOI', 'Area', 'CO2_thayr'] + \
+                   [f'N2O_thayr_y{i}' for i in range(1, 21)] + \
+                   [f'CH4_thayr_y{i}' for i in range(1, 21)] + \
+                   ['sdCO2ha'] + [f'sdN2Oha_y{i}' for i in range(1, 21)] + \
+                   [f'sdCH4ha_y{i}' for i in range(1, 21)] + \
+                   ['CO2_tyr'] + [f'N2O_tyr_y{i}' for i in range(1, 21)] + \
+                   [f'CH4_tyr_y{i}' for i in range(1, 21)] + \
+                   ['sdCO2'] + [f'sdN2O_y{i}' for i in range(1, 21)] + \
+                   [f'sdCH4_y{i}' for i in range(1, 21)]
+
+    #TODO: need to create a naming above
+    resdf = pd.DataFrame(resdf, columns=column_names)
+
+    #NOTE: setting the numbers for projections
     # # Convert to JSON output
-    # restib = []
-    # for r in range(len(resdf)):
-    #     aoi_dict = {
-    #         'AOI': f'Sub_AOI-{r+1}',
-    #         'CO2_thayr': [resdf.iloc[r]['CO2_thayr']] * 20,
-    #         # NOTE: biomass_co2_sd[aoi_id] gives the sd for biomass_co2_result for that aoi_id
-    #         'sdCO2ha': [resdf.iloc[r]['sdCO2ha']] * 20,
-    #         'CO2_tyr': [resdf.iloc[r]['CO2_tyr']] * 20,
-    #         'sdCO2': [resdf.iloc[r]['sdCO2']] * 20,
-    #         'N2O_thayr': resdf.iloc[r][[f'N2O_thayr_y{i}' for i in range(1, 21)]].tolist(),
-    #         'sdN2Oha': resdf.iloc[r][[f'sdN2Oha_y{i}' for i in range(1, 21)]].tolist(),
-    #         'N2O_tyr': resdf.iloc[r][[f'N2O_tyr_y{i}' for i in range(1, 21)]].tolist(),
-    #         'sdN2O': resdf.iloc[r][[f'sdN2O_y{i}' for i in range(1, 21)]].tolist(),
-    #         'CH4_thayr': resdf.iloc[r][[f'CH4_thayr_y{i}' for i in range(1, 21)]].tolist(),
-    #         'sdCH4ha': resdf.iloc[r][[f'sdCH4ha_y{i}' for i in range(1, 21)]].tolist(),
-    #         'CH4_tyr': resdf.iloc[r][[f'CH4_tyr_y{i}' for i in range(1, 21)]].tolist(),
-    #         'sdCH4': resdf.iloc[r][[f'sdCH4_y{i}' for i in range(1, 21)]].tolist()
-    #     }
-    #     restib.append(aoi_dict)
-# 
-#     
-#     json_output = json.dumps(result, indent=2)
-# 
-#     # Ensure the output directory exists
-      output_dir = 'output'
-      os.makedirs(output_dir, exist_ok=True)
-# 
-#     sanitized = sanitize_filename(f'{intervention_subcategory}.json')
-# 
-#     # Write the JSON output
-     output_file = os.path.join(output_dir, sanitized)
-     with open(output_file, 'w') as f:
-        f.write(json_output)
-# 
-#     print(f"\n\nGenerated file: {sanitized} in the output folder.")
-# 
+    restib = []
+    for r in range(len(resdf)):
+        aoi_dict = {
+            'AOI': f'Sub_AOI-{r+1}',
+            'CO2_thayr': [resdf.iloc[r]['CO2_thayr']] * 20,
+            # NOTE: biomass_co2_sd[aoi_id] gives the sd for biomass_co2_result for that aoi_id
+            'sdCO2ha': [resdf.iloc[r]['sdCO2ha']] * 20,
+            'CO2_tyr': [resdf.iloc[r]['CO2_tyr']] * 20,
+            'sdCO2': [resdf.iloc[r]['sdCO2']] * 20,
+            'N2O_thayr': resdf.iloc[r][[f'N2O_thayr_y{i}' for i in range(1, 21)]].tolist(),
+            'sdN2Oha': resdf.iloc[r][[f'sdN2Oha_y{i}' for i in range(1, 21)]].tolist(),
+            'N2O_tyr': resdf.iloc[r][[f'N2O_tyr_y{i}' for i in range(1, 21)]].tolist(),
+            'sdN2O': resdf.iloc[r][[f'sdN2O_y{i}' for i in range(1, 21)]].tolist(),
+            'CH4_thayr': resdf.iloc[r][[f'CH4_thayr_y{i}' for i in range(1, 21)]].tolist(),
+            'sdCH4ha': resdf.iloc[r][[f'sdCH4ha_y{i}' for i in range(1, 21)]].tolist(),
+            'CH4_tyr': resdf.iloc[r][[f'CH4_tyr_y{i}' for i in range(1, 21)]].tolist(),
+            'sdCH4': resdf.iloc[r][[f'sdCH4_y{i}' for i in range(1, 21)]].tolist()
+        }
+        restib.append(aoi_dict)
+
+    # Write the DataFrame to a CSV file
+    result_df.to_csv('result.csv', index=False)
+    # 
+    # #TODO: need to create a json file from result_df 
+    # json_output = json.dumps(result_df, indent=2)
+    # 
+    # #TODO: uncomment this part to create the file with santized output
+    # # # Ensure the output directory exists
+    # output_dir = 'output'
+    # os.makedirs(output_dir, exist_ok=True)
+    # 
+    # # Write the JSON output
+    # sanitized_filename = 'output_file.json'  # Replace with actual filename sanitization if needed
+    # output_file = os.path.join(output_dir, sanitized_filename)
+    # with open(output_file, 'w') as f:
+    #     json.dump(json_data, f, indent=4)
+
+    # sanitized = sanitize_filename(f'{intervention_subcategory}.json')
+    # 
+    # # # Write the JSON output
+    # output_file = os.path.join(output_dir, sanitized)
+    # with open(output_file, 'w') as f:
+    #    f.write(json_output)
+
+    #print(f"\n\nGenerated file: {sanitized_filename} in the output folder.")
+
 generate_output()
