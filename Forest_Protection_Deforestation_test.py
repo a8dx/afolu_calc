@@ -273,11 +273,17 @@ def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
 def calculate_historical_deforestation_rate(total_results, scenario, log_level='info'):
     global data
     
-    scenario_data = data["scenarios"][scenario][0]
-    deforestation_pre = scenario_data["deforestation_rate_pre"]
-    deforestation_post = scenario_data["deforestation_rate_post"]
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
     
     total_results = []
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
+        
+        deforestation_pre = scenario_data.get("deforestation_rate_pre")
+        deforestation_post = scenario_data.get("deforestation_rate_post")
     
     historical_def_rate = deforestation_pre - deforestation_post
     
@@ -290,36 +296,22 @@ def calculate_historical_deforestation_rate(total_results, scenario, log_level='
         print(f"  Historical Deforestation Rate: {historical_def_rate:.2f} %/yr")
     
     return total_results
-# def calculate_historical_deforestation_rate(scenario, years):
-#     """
-#     Parameters:
-#     scenario (str): Scenario in question
-#     years (int): Number of years over which the change is calculated.
-#     Returns:
-#     float: Historical deforestation rate in %/yr.
-#     """
-#     global data_FP
-#     scenario_data_FP = data_FP.get("scenarios", {}).get(scenario, [{}])[0]
-#     years = scenario_data_FP.get("years")
-#     deforestation_pre = scenario_data_FP.get("deforestation_rate_pre")
-#     deforestation_post = scenario_data_FP.get("deforestation_rate_post")
-# 
-#     historical_def_rate = deforestation_pre - deforestation_post
-#     return historical_def_rate
 
 # Define equation to calculate Baseline Deforested Area
 def calculate_deforested_area_yeari(total_results, scenario, log_level='info'):
     global data
     
     scenario_data = data["scenarios"][scenario][0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
 
     total_results = []
     
-    for aoi_id in total_results["aoi_id"]:
-        forest_area_aoi = aoi_id["area"]
-        historical_def_rate = aoi_id["hist_def_rate"]
-        
-    deforested_area_yeari = (historical_def_rate / 100) * forest_area_aoi
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        forest_area_aoi = subregion["area"]
+        historical_def_rate_aoi = subregion["hist_def_rate"]
+    
+    deforested_area_yeari = (historical_def_rate_aoi / 100) * forest_area_aoi
     
     total_results.append({
         "deforested_area_year_i": deforested_area_yeari
@@ -330,25 +322,6 @@ def calculate_deforested_area_yeari(total_results, scenario, log_level='info'):
         print(f"  Deforested Area year i: {deforested_area_yeari:.2f} ha/yr")
     
     return total_results
-# def calculate_deforested_area_yeari(historical_def_rate, scenario, years):
-#     """
-#     Parameters:
-#     historical_def_rate (float): Historical deforestation rate in %/yr.
-#     forest_area (float): Initial forest area in hectares.
-#     scenario (str): Scenario in question.
-#     years (int): Number of years over which the change is calculated.
-#     Returns:
-#     float: Baseline deforested area in ha.
-#     """
-#     global data_FP
-#     scenario_data_FP = data_FP.get("scenarios", {}).get(scenario, [{}])[0]
-#     years = scenario_data_FP.get("years")    
-#     forest_area = scenario_data_FP.get("forest_area")
-#     
-#     deforested_area_yeari = (historical_def_rate / 100) * forest_area
-#     print(f"Annual Baseline Deforested Area: {deforested_area} ha/yr")
-#     return deforested_area_yeari
-  
 
 # Define equation to calculate Baseline Total Biomass Carbon Stock Loss
 def calculate_carbon_stock_loss_yeari(total_results, scenario, log_level='info'):
@@ -359,9 +332,10 @@ def calculate_carbon_stock_loss_yeari(total_results, scenario, log_level='info')
     
     total_results = []
     
-    for aoi_id in total_results:
-        deforested_area_yeari = aoi_id["deforested_area_year_i"]
-        average_total_tco2e = aoi_id["total_carbon_stock"]
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        deforested_area_yeari = subregion["deforested_area_year_i"]
+        average_total_tco2e = subregion["total_carbon_stock"]
  
         carbon_stock_loss = deforested_area_yeari * average_total_tco2e
         
@@ -371,22 +345,9 @@ def calculate_carbon_stock_loss_yeari(total_results, scenario, log_level='info')
         
         if log_level == 'debug':
             print(f"Subregion {total_results['aoi_id']}:")
-            print(f"  Carbon Stock Loss year i: {carbon_stock_loss:.2f} ha")
+            print(f"  Carbon Stock Loss year i: {carbon_stock_loss:.2f} tCO2/yr")
     
     return total_results
-# def calculate_carbon_stock_loss_yeari(deforested_area_yeari, average_total_tco2e, scenario):
-#     """
-#     Parameters:
-#     deforested_area (float): Baseline deforested area in ha.
-#     average_total_tco2e (float): Average total carbon stock in tCO2e/ha.
-#     scenario (str): Scenario in question.
-#     Returns:
-#     float: Annual Total Biomass Carbon Stock loss in tCO2e/yr.
-#     """
-#     carbon_stock_loss = deforested_area_yeari * average_total_tco2e
-#     print(f"Baseline Annual Total Biomass Carbon Stock loss: {carbon_stock_loss} tCO2e/yr")
-#     return carbon_stock_loss_yeari
-
 
 # Define equation to calculate Baseline Total Biomass CO2 Emissions ##
 def calculate_baseline_biomass_co2_emissions(total_results, scenario, log_level='info'):
@@ -397,9 +358,10 @@ def calculate_baseline_biomass_co2_emissions(total_results, scenario, log_level=
     
     total_results = []
     
-    for aoi_id in total_results:
-        historical_def_rate = aoi_id["hist_def_rate"]
-        carbon_stock_loss_yeari = aoi_id["total_carbon_stock_loss"]
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        historical_def_rate = subregion["hist_def_rate"]
+        carbon_stock_loss_yeari = subregion["total_carbon_stock_loss"]
  
         annual_baseline_biomass_co2_emissions = historical_def_rate * carbon_stock_loss_yeari
         
@@ -409,21 +371,9 @@ def calculate_baseline_biomass_co2_emissions(total_results, scenario, log_level=
         
         if log_level == 'debug':
             print(f"Subregion {total_results['aoi_id']}:")
-            print(f"  Annual Baseline Emissions year i: {annual_baseline_biomass_co2_emissions:.2f} ha")
+            print(f"  Annual Baseline Emissions year i: {annual_baseline_biomass_co2_emissions:.2f} tCO2/yr")
     
     return total_results
-# def calculate_baseline_biomass_co2_emissions(historical_def_rate, carbon_stock_loss_yeari, scenario):
-#     """
-#     Parameters:
-#     historical_def_rate (float): Historical deforestation rate in %/yr.
-#     carbon_stock_loss_yeari (float): Annual total biomass carbon stock loss in tCO2e/yr.
-#     scenario (str): Scenario in question.
-#     Returns:
-#     float: Annual Total Biomass Carbon Stock loss in tCO2e/yr.
-#     """
-#     annual_baseline_biomass_co2_emissions = historical_def_rate * carbon_stock_loss_yeari
-#     print(f"Annual Baseline Total Biomass CO2 emissions: {annual_baseline_biomass_co2_emissions} tCO2e/yr")
-#     return annual_baseline_biomass_co2_emissions
 
 ####### Baseline emissions calculations ###########
 
@@ -486,21 +436,6 @@ def calculate_actual_area_deforested_year_n(total_results, scenario, log_level='
     print(f"forest_area_end_of_year_n: {forest_area_end_of_year_n:.2f} ha/yrr")
 
     return total_results
-# def calculate_forest_area_end_of_year_n(scenario, n):
-#     global data_FP
-#     scenario_data = data["scenarios"][scenario][0]
-#     forest_area = scenario_data["forest_area"]
-#     deforestation_post = scenario_data["deforestation_rate_post"]
-#     
-#     total_results = []
-# 
-#     forest_area_end_of_year_n = forest_area
-# 
-#     for year in range(1, n + 1):
-#         actual_area_deforested_year_n = (forest_area_end_of_year_n * deforestation_post) / 100
-#         forest_area_end_of_year_n -= actual_area_deforested_year_n
-# 
-#     return forest_area_end_of_year_n
 
 #Eq 2 - area of avoided deforestation in year n
 def calculate_area_avoided_deforestation_year_n(total_results, scenario, log_level='info'):
@@ -561,7 +496,6 @@ def calculate_avoided_emissions_trees_each_year(total_results, scenario, log_lev
         print(f"avoided_emissions_trees: {avoided_emissions_trees:.2f} tCO2/yr")
      
         return total_results
-
 
 ######Calculate all - equations for baseline and intervention emissions calculation
 def calculate_all(scenario, log_level='info'):
