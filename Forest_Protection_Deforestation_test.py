@@ -125,7 +125,7 @@ from helpersFP import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_
 
 ### STEP 1 - Estimate mean annual AGB (in Mg/ha) using GEDI data_FPset ####
 # GEE path: https://code.earthengine.google.com/?scriptPath=users%2Fbabomfimf%2FAGB-GEDI-L4A%3Atest-3_AGB_annual_mean
-## Anthony's GEE: https://code.earthengine.google.com/44d6aaa5db4764b5b5f3825baf900d04
+## Anthony's GEE: for Persistent: `021_extract_SOC_and_AGB.js` in the `AFOLU` shared GEE Scripts library (for others: https://code.earthengine.google.com/44d6aaa5db4764b5b5f3825baf900d04)
 
 #if this doesn't work authenticate from the command line  by running `earthengine authenticate`
 ee.Authenticate()
