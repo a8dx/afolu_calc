@@ -8,8 +8,10 @@
 # Filename: Forest_Protection_Deforestation_test.py
 # Author: Barbara Bomfim
 # Date Started: 07/11/2024
-# Last Edited: 07/15/2024
+# Last Edited: 07/19/2024 (Anthony D'Agostino)
 # Purpose: AFOLU GHG Calculations for Forest Protection from Deforestation (FP) Interventions
+# Updates:
+#      7/19/2024 - switch from L4A to L4B as AGB source
 # **********************************************************************************************************/
 
 #### Required Inputs ####
