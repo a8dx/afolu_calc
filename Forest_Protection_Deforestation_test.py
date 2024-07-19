@@ -142,29 +142,21 @@ polygon_vertices = [
 polygon = ee.Geometry.Polygon(polygon_vertices)
 
 # Access the GEDI L4A Monthly data_FPset
-gedi_l4a_monthly = ee.ImageCollection('LARSE/GEDI/GEDI04_A_002_MONTHLY')
-
-# Filter the collection to your polygon and a wider time range
-filtered_gedi = gedi_l4a_monthly.filterBounds(polygon).filterDate('2019-01-01', '2020-01-01')#for bau, starts as far back as possible until just before intervention starts
+gedi_l4b = ee.Image('LARSE/GEDI/GEDI04_B_002')
+              
+# Filter the collection to your polygon
+filtered_gedi = gedi_l4b.filterBounds(polygon)
 # Filter agbd
-agbd_band = filtered_gedi.select('agbd')
-# Calculate annual mean
-agbd_image = agbd_band.reduce(ee.Reducer.mean())
+agbd_image = filtered_gedi.select('MU')
 
 # Compute the mean annual AGBD value for the entire polygon
 average_agbd = agbd_image.reduceRegion(
     reducer=ee.Reducer.mean(),
     geometry=polygon,
-    scale=25  # Scale should match the resolution of the data_FPset
+    scale=1000  # Scale should match the resolution of the data_FPset
 )
 average_agbd_dict = average_agbd.getInfo()
 print(f"{average_agbd_dict} Mg/ha")
-
-average_agbd = agbd_image.reduceRegion(
-    reducer=ee.Reducer.mean(),
-    geometry=polygon,
-    scale=25  # Scale should match the resolution of the data_FPset
-)
 
 print("\nArea of the polygon:")
 print(f"{polygon.area().getInfo()/10000} ha") # to get area in hectares
