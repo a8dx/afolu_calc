@@ -17,7 +17,7 @@
 #   file, which sources data from Dynamic World land use data,  data layers
 # User inputs: User inputs depend on sub-intervention category (planted or natural forest; 
 #  tillage; nutrient management; fire management). 
--Baseline data:
+# -Baseline data:
 #           -land area: area under business-as-usual land use
 #           -land_use_type: previous land use type (Agroforestry, Annual cropland, Annual fallow, Degraded land, Flooded rice, Grassland)
 #           -forest_type: selection from dropdown list
