@@ -8,8 +8,10 @@
 # Filename: Forest_Protection_Deforestation_test.py
 # Author: Barbara Bomfim
 # Date Started: 07/11/2024
-# Last Edited: 07/15/2024
+# Last Edited: 07/19/2024 (Anthony D'Agostino)
 # Purpose: AFOLU GHG Calculations for Forest Protection from Deforestation (FP) Interventions
+# Updates:
+#      7/19/2024 - switch from L4A to L4B as AGB source
 # **********************************************************************************************************/
 
 #### Required Inputs ####
@@ -123,7 +125,7 @@ from helpersFP import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_
 
 ### STEP 1 - Estimate mean annual AGB (in Mg/ha) using GEDI data_FPset ####
 # GEE path: https://code.earthengine.google.com/?scriptPath=users%2Fbabomfimf%2FAGB-GEDI-L4A%3Atest-3_AGB_annual_mean
-## Anthony's GEE: https://code.earthengine.google.com/44d6aaa5db4764b5b5f3825baf900d04
+## Anthony's GEE: for Persistent: `021_extract_SOC_and_AGB.js` in the `AFOLU` shared GEE Scripts library (for others: https://code.earthengine.google.com/44d6aaa5db4764b5b5f3825baf900d04)
 
 #if this doesn't work authenticate from the command line  by running `earthengine authenticate`
 ee.Authenticate()
@@ -142,29 +144,21 @@ polygon_vertices = [
 polygon = ee.Geometry.Polygon(polygon_vertices)
 
 # Access the GEDI L4A Monthly data_FPset
-gedi_l4a_monthly = ee.ImageCollection('LARSE/GEDI/GEDI04_A_002_MONTHLY')
-
-# Filter the collection to your polygon and a wider time range
-filtered_gedi = gedi_l4a_monthly.filterBounds(polygon).filterDate('2019-01-01', '2020-01-01')#for bau, starts as far back as possible until just before intervention starts
+gedi_l4b = ee.Image('LARSE/GEDI/GEDI04_B_002')
+              
+# Filter the collection to your polygon
+filtered_gedi = gedi_l4b.filterBounds(polygon)
 # Filter agbd
-agbd_band = filtered_gedi.select('agbd')
-# Calculate annual mean
-agbd_image = agbd_band.reduce(ee.Reducer.mean())
+agbd_image = filtered_gedi.select('MU')
 
 # Compute the mean annual AGBD value for the entire polygon
 average_agbd = agbd_image.reduceRegion(
     reducer=ee.Reducer.mean(),
     geometry=polygon,
-    scale=25  # Scale should match the resolution of the data_FPset
+    scale=1000  # Scale should match the resolution of the data_FPset
 )
 average_agbd_dict = average_agbd.getInfo()
 print(f"{average_agbd_dict} Mg/ha")
-
-average_agbd = agbd_image.reduceRegion(
-    reducer=ee.Reducer.mean(),
-    geometry=polygon,
-    scale=25  # Scale should match the resolution of the data_FPset
-)
 
 print("\nArea of the polygon:")
 print(f"{polygon.area().getInfo()/10000} ha") # to get area in hectares

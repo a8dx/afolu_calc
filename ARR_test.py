@@ -17,19 +17,23 @@
 #   file, which sources data from Dynamic World land use data,  data layers
 # User inputs: User inputs depend on sub-intervention category (planted or natural forest; 
 #  tillage; nutrient management; fire management). 
-#   -Baseline data:
+-Baseline data:
 #           -land area: area under business-as-usual land use
 #           -land_use_type: previous land use type (Agroforestry, Annual cropland, Annual fallow, Degraded land, Flooded rice, Grassland)
 #           -forest_type: selection from dropdown list
 #           -tillage_type: Full Till, Reduced Till, No Till, Unknown
 #           -ag_inputs: Low, Medium, High without manure, High with manure, Unknown
 #           -fire_used: yes, no
+#           -years: intervention durationf (number of years)
 #  -All sub-interventions require:
 #           -forest_area: area that is being changed from previous land use to new A/R land use
 #           -number of improvements over initial scenario (0, 1 or 2)
 #.    -For Forest creation sub-intervention:
 #           -forest_creation: planted or natural forest (native forest or mangrove forest)
 #           -forest_type: selection from dropdown list
+#           -H: annual wood removal - merchantable round wood over bark - (m3/yr)
+#           -FGtrees = annual volume of fuelwood removal of whole trees (m3/yr)
+#           -FGpart = annual volume of fuelwood removal of tree parts (m3/yr)
 #     -For tillage sub-intervention:
 #           -tillage_type: Full Till, Reduced Till, No Till, Unknown
 #.    -For nutrient management sub-intervention:
