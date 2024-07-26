@@ -17,7 +17,7 @@
 #   file, which sources data from Dynamic World land use data,  data layers
 # User inputs: User inputs depend on sub-intervention category (planted or natural forest; 
 #  tillage; nutrient management; fire management). 
--Baseline data:
+# -Baseline data:
 #           -land area: area under business-as-usual land use
 #           -land_use_type: previous land use type (Agroforestry, Annual cropland, Annual fallow, Degraded land, Flooded rice, Grassland)
 #           -forest_type: selection from dropdown list
@@ -106,7 +106,7 @@ from concurrent.futures import ProcessPoolExecutor
 import ee
 import re
 
-from helpersARRfinal import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_stock, sanitize_filename
+from helpersARR_final import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_stock, sanitize_filename
 
 
 ### STEP 1 - Estimate mean annual AGB (in Mg/ha) using GEDI dataset ####

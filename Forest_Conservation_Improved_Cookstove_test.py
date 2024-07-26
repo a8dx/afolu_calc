@@ -551,7 +551,7 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, fcic_co2_result):
     results_unc[f'CH4_{aoi_id}'] = []
      
     
-    for m in range(nx):
+    # for m in range(nx):
         # # SOC Stock Change
         # SOCREF = np.random.normal(temp_bau['SOC_ref_tonnes_C_ha'].values[0], temp_bau['SOC_ref_tonnes_C_ha_sd'].values[0])
         # FLUbau = temp_bau['FLU'].values[0]
@@ -595,7 +595,7 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, fcic_co2_result):
         # leachN = (FSN + FON + FSOM + FPRP) * FRAC_LEACH * EF_leach  # indirect leaching
         # N2O = (dirN + volN + leachN) / 1000 * 44 / 28  # sum and convert to tN2O
 
-        results_unc[f"N2O_{aoi_id}"].append(N2O)
+        # results_unc[f"N2O_{aoi_id}"].append(N2O)
         
         #FIXME: add if incorporating fire 
         # Add change in N2O due to fire management
@@ -621,8 +621,7 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, fcic_co2_result):
 
 
     # column_names = ['AOI', 'Area', 'Rep', 'SOC', 'totalC', f'N2O_y{aoi_id}', f'CH4_y{aoi_id}']
-    results_unc_df = pd.DataFrame(results_unc)
-    return results_unc_df
+    return results_unc
 
 ###### Generating Output ####
 def generate_output():
