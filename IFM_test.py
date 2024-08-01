@@ -1153,7 +1153,7 @@ def generate_output():
         restib.append(aoi_dict)
 
     # Write the DataFrame to a CSV file
-    result_df.to_csv('result.csv', index=False)
+    result_df.to_csv('output\IFM_test_result.csv', index=False)
     # 
     # #TODO: need to create a json file from result_df 
     # json_output = json.dumps(result_df, indent=2)
