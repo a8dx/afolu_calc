@@ -1,67 +1,37 @@
-# /***********************************************************************************************************
-#   Copyright © 2024 Mathematica, Inc. This software was developed by Mathematica as part of the AFOLU GHG Calculator 
-# project funded by USAID through Contract No. 51964. This code cannot be copied, distributed or used without 
-# the express written permission of Mathematica, Inc.
-# ***********************************************************************************************************/
-
-# /**********************************************************************************************************
-# Filename: IFM_test.py
-# Author: Barbara Bomfim
-# Date Started: 07/14/2024
-# Last Edited: 07/15/2024
-# Purpose: AFOLU GHG Calculations for Improved Forest Management Interventions (RIL and Extended Rotation)
-# **********************************************************************************************************/
-
 #### Required Inputs ####
 # Climate zone and soil type: These are contained in the geography_mask_area_info json
 #   file, which sources data from Dynamic World land use data,  data layers
-# User inputs: User inputs depend on sub-intervention category (planted or natural forest; 
-#  tillage; nutrient management; fire management). 
+# User inputs: User inputs depend on sub-intervention category (reduced-impact logging (RIL), Extended Rotation (ER), IFM (stop logging)). 
 #   - Initial:
 #           -land area: area under business-as-usual land use
-#           -forest_type_deforestation: forest type prior to deforestation
 #.          -forest_management_type: Natural, Plantation
-#           -tillage_type: Full Till, Reduced Till, No Till, Unknown
-#           -ag_inputs: Low, Medium, High without manure, High with manure, Unknown
-#           -fire_used: yes, no
 #.  -Baseline data:
-#           -deforested_land_area: area under business-as-usual land use (deforestation)
-#           -deforestation_rate_pre: Deforestation rate (in %/yr) before intervention, based on published data_FP (e.g., global forest watch)
-#           -forest_type_deforestation: forest type prior to deforestation
 #.          -forest_management_type: Natural, Plantation
-#           -fire_used: yes, no
-#           -deforested_for_fuelwood: Percentage of harvested wood used for fuelwood
-#           -agroforestry_type: Alleycropping, Fallow, Hedgerow, Multistrata, Parkland, Shaded perennial, Silvoarable, Silvopasture
-#           -monoculture_type: Oilpalm, Rubber, Tea
-#           -settlement_type: Settlement, Urban green, Turfgrass, Cultivated soil
-#           -reservoir_type: Default, Oligotrophic, Mesotrophic, Eutrophic, Hypereutrophic
-#           -tillage_type: Full Till, Reduced Till, No Till, Unknown
-#           -ag_inputs: Low, Medium, High without manure, High with manure, Unknown
-#           -illegal_logging_rate: volume timber over bark extracted illegally each year (m3 ha-1 yr-1)
+#           -forest_type: forest type prior to intervention
 #           -D: wood density (t/m3)
 #           -VolExt_before = volume timber over bark extracted before project intervention (m3 ha-1)
-#           -AHA: annual harvest area: in ha - user input. Will attribute a value in the JSON but will indicate this in the code.
-#           "C_timber": Proportion of total carbon extracted that resides in each wood product class 
+#           -AHA (Annual Harvest Area): in ha - user input. 
+#               -- Will attribute a value in the JSON but will indicate this in the code.
+#           -C_timber: Proportion of total carbon extracted that resides in each wood product class 
 #                 -- (Roundwood: Tropical "0.55", Temperate "0.45", Boreal "0.42", Sawnwood: Tropical 0.58, Temperate 0.48, Boreal 0.44, Woodbase panels: Tropical 0.62, Temperate 0.52, Boreal 0.52)
-#           -"prop_ox": Carbon emitted due to short-term oxidation of wood products "0.25" - the average across: Sawnwood 0.2; Woodbase panels 0.1; Other industrial roundwood 0.3; Paper and paperboard 0.4)
-#           -"prop_ox_long": Carbon in additional oxidized fraction "0.947" - the average across: Sawnwood 0.84; Woodbase panels 0.97; Other industrial roundwood 0.99; Paper and paperboard 0.99
+#           -prop_ox: Carbon emitted due to short-term oxidation of wood products "0.25" - the average across: Sawnwood 0.2; Woodbase panels 0.1; Other industrial roundwood 0.3; Paper and paperboard 0.4)
+#           -prop_ox_long: Carbon in additional oxidized fraction "0.947" - the average across: Sawnwood 0.84; Woodbase panels 0.97; Other industrial roundwood 0.99; Paper and paperboard 0.99
 #           -RL: Number of years in baseline rotation length
 #           -GR: Growth rate
 #           -BEF: Biomass Expansion Factor
 #           -half_life_wp = Half-life of wood products
 #  -Intervention requires:
-#           -forest_area: forest area that is being protected
-#           -forest_type: selection from dropdown list
-#           -deforestation_rate_post: Deforestation rate (in %/yr) after intervention, based on published data_FP (e.g., global forest watch)
-#           -fire_used: yes, no
-#.          -fire_incidence_rate: default annual average fire incidence rate (0.1) but can be calculated as the average of the years of available data_FP. 
-#               Calculate fraction of forest (by land cover data_FP) that had burned each year to get the annual fire incidence rate.
-#           -bio_ef: gCO2 per kg of dry matter burnt
+#           -forest_area: forest area under intervention
+#.          -forest_management_type: Natural, Plantation
+#           -forest_type: forest type prior to intervention
 #           -D: wood density (t/m3)
-#           "C_timber": Proportion of total carbon extracted that resides in each wood product class 
+#           -VolExt_before = volume timber over bark extracted before project intervention (m3 ha-1)
+#           -AHA (Annual Harvest Area): in ha - user input. 
+#               -- Will attribute a value in the JSON but will indicate this in the code.
+#           -C_timber: Proportion of total carbon extracted that resides in each wood product class 
 #                 -- (Roundwood: Tropical "0.55", Temperate "0.45", Boreal "0.42", Sawnwood: Tropical 0.58, Temperate 0.48, Boreal 0.44, Woodbase panels: Tropical 0.62, Temperate 0.52, Boreal 0.52)
-#           -"prop_ox": Carbon emitted due to short-term oxidation of wood products "0.25" - the average across: Sawnwood 0.2; Woodbase panels 0.1; Other industrial roundwood 0.3; Paper and paperboard 0.4)
-#           -"prop_ox_long": Carbon in additional oxidized fraction "0.947" - the average across: Sawnwood 0.84; Woodbase panels 0.97; Other industrial roundwood 0.99; Paper and paperboard 0.99
+#           -prop_ox: Carbon emitted due to short-term oxidation of wood products "0.25" - the average across: Sawnwood 0.2; Woodbase panels 0.1; Other industrial roundwood 0.3; Paper and paperboard 0.4)
+#           -prop_ox_long: Carbon in additional oxidized fraction "0.947" - the average across: Sawnwood 0.84; Woodbase panels 0.97; Other industrial roundwood 0.99; Paper and paperboard 0.99
 #           -RL: Number of years in baseline rotation length
 #           -GR: Growth rate
 #           -BEF: Biomass Expansion Factor
@@ -77,24 +47,10 @@
 #BGBREF:BGB for the climate zone and soil type (tC/ha)
 
 ##SOC
-# SOCREF: Reference soil stock for the climate zone and soil type (t C/ha)
-# FLU: Land use emissions factor (1 for planted forest, 1 for natural forest)
-# FMG: Management factor for both business as usual and intervention scenario 
-# FI: C input factor for both business as usual and intervention scenario 
 
 ##N2O
-# burning_n2o_ef: Emissions factor for N2O from burning (g N2O/kg dry matter burnt)
-# combustion_factor: combustion factor for fire
-# fuel_biomass: amount of biomass available for burning (t dry matter/ha)
-# FON: Amount of organic N applied annually (kg N/ha/yr)
-# EFDir: Emissions factor for direct N2O emissions from N inputs (kg N2O-N/kg N)
-# FRAC_GASM: Fraction of organic N that volatilizes (kg NH3-N + NOx-N)/kg N
-# EF_vol: Emissions factor for indirect N2O emissions from volatilization kg N2O-N/(kg NH3-N + NOx-N)
-# FRAC_LEACH: Fraction of N inputs that is lost to leaching (kg N loss/kg N)
-# EF_leach: Emissions factor for indirect N2O emissions from volatilization (kg N2O-N/kg N loss)
 
 ##CH4
-# burning_ch4_ef: Emissions factor for CH4 from burning (g CH4/kg dry matter burnt)
 
 #### Outputs ####
 # Outputs will be saved to a json file that includes annual CO2, N2O, and CH4 impacts of
