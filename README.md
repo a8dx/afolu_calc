@@ -13,3 +13,8 @@
 3. If you have not run the script for some time, updates may have been made to Pipfile and Pipfile.lock. To ensure you are running the most up-to-date Pipfiles, you can upgrade packages by navigating to AFOLU_CALC directory and in the terminal, type the following commands:
 - pipenv update
 - pipenv shell
+
+4. Google Earth Engine Requirements
+- Create a Google Earth Engine Account: https://code.earthengine.google.com/register 
+- Contact [fill name here] for an access Invitation to the ee-babomfimf3 Project
+- TODO: add rest of requirements here

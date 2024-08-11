@@ -425,9 +425,9 @@ def calculate_actual_area_deforested_year_n(total_results, scenario, log_level='
     })
         
     if log_level == 'debug':
-    print(f"Subregion {total_results['aoi_id']}:")
-    print(f"actual_area_deforested_year_n: {actual_area_deforested_year_n:.2f} ha/yrr")
-    print(f"forest_area_end_of_year_n: {forest_area_end_of_year_n:.2f} ha/yrr")
+        print(f"Subregion {total_results['aoi_id']}:")
+        print(f"actual_area_deforested_year_n: {actual_area_deforested_year_n:.2f} ha/yrr")
+        print(f"forest_area_end_of_year_n: {forest_area_end_of_year_n:.2f} ha/yrr")
 
     return total_results
 
@@ -454,8 +454,8 @@ def calculate_area_avoided_deforestation_year_n(total_results, scenario, log_lev
     })
         
     if log_level == 'debug':
-    print(f"Subregion {total_results['aoi_id']}:")
-    print(f"forest_area_end_of_year: {forest_area_end_of_year:.2f} ha/yrr")
+        print(f"Subregion {total_results['aoi_id']}:")
+        print(f"forest_area_end_of_year: {forest_area_end_of_year:.2f} ha/yrr")
     
     return total_results
 
@@ -486,8 +486,8 @@ def calculate_avoided_emissions_trees_each_year(total_results, scenario, log_lev
          })
         
         if log_level == 'debug':
-        print(f"Subregion {total_results['aoi_id']}:")
-        print(f"avoided_emissions_trees: {avoided_emissions_trees:.2f} tCO2/yr")
+            print(f"Subregion {total_results['aoi_id']}:")
+            print(f"avoided_emissions_trees: {avoided_emissions_trees:.2f} tCO2/yr")
      
         return total_results
 
@@ -840,7 +840,7 @@ def generate_output():
         restib.append(aoi_dict)
 
     # Write the DataFrame to a CSV file
-    result_df.to_csv('result.csv', index=False)
+    result_df.to_csv('output\Forest_Protection_Deforestation_test_result.csv', index=False)
     # 
     # #TODO: need to create a json file from result_df 
     # json_output = json.dumps(result_df, indent=2)
