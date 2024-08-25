@@ -92,11 +92,11 @@
 #   }
 # ]
 
-## Annual GHG impact GEDI data and further calculations ###
-
-from pygrowthmodels import chapman_richards
+######### Annual GHG impact calculations ############
 
 ## Import libraries
+from pygrowthmodels import chapman_richards
+
 import json
 import os
 
@@ -110,15 +110,16 @@ pd.__version__
 
 from helpers import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_stock, sanitize_filename
 
-
-### STEP 1 - Estimate mean annual AGB (in Mg/ha) using GEDI dataset ####
+##### STEP 1 - Estimate mean annual AGB (in Mg/ha) using GEDI dataset ######
 # GEE path: https://code.earthengine.google.com/?scriptPath=users%2Fbabomfimf%2FAGB-GEDI-L4A%3Atest-3_AGB_annual_mean
-## Anthony's GEE: https://code.earthengine.google.com/44d6aaa5db4764b5b5f3825baf900d04
+# Anthony's GEE: https://code.earthengine.google.com/44d6aaa5db4764b5b5f3825baf900d04
 
-#if this doesn't work authenticate from the command line  by running `earthengine authenticate`
+# Authenticate GEE #
+# if this doesn't work authenticate from the command line  by running `earthengine authenticate`
 ee.Authenticate()
+
 # Initialize Earth Engine
-# Use the name of GEE project here
+# Use the GEE project name here
 ee.Initialize(project='ee-babomfimf3')
 
 # Define sample polygon vertices
@@ -128,6 +129,7 @@ polygon_vertices = [
     [-55.83219969735529, -15.407813261205916],
     [-55.85747628925944, -15.391799301778946]
     ]
+
 # Create an Earth Engine Polygon
 polygon = ee.Geometry.Polygon(polygon_vertices)
 
@@ -159,14 +161,14 @@ print(f"{polygon.area().getInfo()/10000} ha") # to get area in hectares
 current_directory = os.getcwd()
 print("Current working directory:", current_directory)
 # Define the relative file path
-file_name = 'ARR_final_GHG_Calculations_Jul_21.json'
+file_name = 'ARR_final.json'
 file_path = os.path.join(current_directory, file_name)
-json_file_path = './ARR_final_GHG_Calculations_Jul_21.json'
+json_file_path = './ARR_final.json'
 # Load data from the JSON file
 with open(file_path, 'r') as file:
         data = json.load(file)
 
-### STEP 2 - Calculate mean annual AGC stock in tCO2e/ha####
+### STEP 2 - Calculate Mean annual AGC stock in tCO2e/ha ####
 
 def mean_annual_agc_stock(scenario, log_level='info'):
     global data
@@ -205,7 +207,7 @@ def mean_annual_agc_stock(scenario, log_level='info'):
     return subregion_results
 
 
-### STEP 3 - Calculate mean annual Total C stock (sum AGC and BGC) ####
+### STEP 3 - Calculate Mean Annual Total C stock (sum AGC and BGC) ####
 
 def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
     global data
@@ -237,14 +239,12 @@ def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
     
     return total_results
 
-
-### STEP 4 - Calculate Annual CO2 impact (∆CG)####
+### STEP 4 - Calculate Annual CO2 impact (∆CG) ####
 
 #Annual-CO2-impact = [[Carbon-i - Carbon-0] - [Carbon-bau - DeltaCarbon-0]]/years
 #Carbon-0: initial carbon stock (tC/ha) - average_agbd_cstock from above for year 0
 #Carbon-i: carbon stock after intervention (tC/ha) - average_agbd_cstock for year i after intervention
 #Carbon-bau: carbon stock under business-as-usual (without intervention) - average_agbd_cstock for year i without intervention
-
 
 #Step 4.1 - Richards-Chapman growth model:
 # Define the Chapman-Richards AGB function using pygrowthmodels
@@ -270,14 +270,13 @@ def calculate_agb_growth(scenario, years, log_level='info'):
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
     subregions = scenario_data.get("aoi_subregions", [])
  
-    # Barbara: please check these mappings to make sure they are correct (based on docs from here:https://github.com/drodriguezperez/pygrowthmodels/blob/master/pygrowthmodels/chapman_richards.py#L26)
+    # mappings based on:https://github.com/drodriguezperez/pygrowthmodels/blob/master/pygrowthmodels/chapman_richards.py#L26)
     alpha = scenario_data.get("MAX", 0)
-    beta = scenario_data.get("k", 0)
-    rate = scenario_data.get("m", 0)
-    time = scenario_data.get("years", 0)
-    CF = scenario_data.get("CF", 0)
-    # Barbara: this is a place holder, needs to be included in the json input (or calculated?)
-    slope = 0.1
+    rate = scenario_data.get("k", 0)
+    slope = scenario_data.get("m", 0)
+    time = scenario_data.get("years", 0) 
+    CF = scenario_data.get("CF", 0) 
+    beta = 0
     
     results = []
     total_agb_rc = 0
@@ -314,9 +313,8 @@ def calculate_agb_growth(scenario, years, log_level='info'):
     
     return results
 
-
 # Define equation to calculate Annual CO2 impact (∆CG)
-#. Ensure carbon_i and carbon_bau are obtained using previous richards-chapman model output
+# carbon_i and carbon_bau are obtained using previous richards-chapman model output
 def calculate_annual_co2_impact(scenario, years, average_agbd_tco2e, log_level='info'):
     global data
 
@@ -884,7 +882,7 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
     results_unc['SOC'] = []
     results_unc['totalC'] = []
     results_unc[f'N2O_{aoi_id}'] = []
-    # TODO: this needs to be aclaulcuated with fire management below
+    # TODO: this needs to be calculated with fire management below
     #TODO: CH4 calculation needed
     # results_unc[f'CH4_{aoi_id}'] = []
      
@@ -904,7 +902,7 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
         results_unc["SOC"].append(dSOC)
 
         # here we add the biomass specific to the aoi_id
-        # NOTE: this number is too large check please
+        # NOTE: this number seems too large - check please
         results_unc["totalC"].append(dSOC * 44/12 + biomass_co2_result[aoi_id]) 
 
         # N2O emissions
@@ -951,7 +949,6 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
         #         fire_per_int = temp_int['fire_management_years'].values[0]
         #         fire_yrs_int = [y for y in range(1, 20) if y % fire_per_int == 0]
         #         results_unc[m, 4 + np.array(fire_yrs_int)] += fireN2O_int
-
         
         #Edit if incorporating fire management 
         # # emissions from fire management
@@ -982,7 +979,6 @@ def generate_output(input_json):
     np.random.seed(1)
     mc = [GHGcalc(aoi_id, df, 1000, intervention_subcategory, biomass_co2_result) for aoi_id in AOIs]
 
-
     # Process results
     result_list = []
     for iteration in mc:
@@ -1005,7 +1001,7 @@ def generate_output(input_json):
     print(result_df.columns)
 
     # result_df has the following columns with aoi_id baked in
-    # TODO: Need to roll them up for totals as well instead of aoi_id
+    # Run code below to roll them up for totals as well instead of aoi_id
     # Index(['AOI', 'Area', 'Rep', 'SOC', 'SOC_sd', 'totalC', 'totalC_sd',
     #    'N2O_tropicalmoist_acrisols', 'N2O_tropicalmoist_acrisols_sd',
     #    'CH4_tropicalmoist_acrisols', 'CH4_tropicalmoist_acrisols_sd',
