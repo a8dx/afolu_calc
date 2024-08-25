@@ -318,7 +318,7 @@ def calculate_agb_growth(scenario, years, log_level='info'):
 def calculate_annual_co2_impact(scenario, years, average_agbd_tco2e, log_level='info'):
     global data
 
-    # Barbara: use this one for carbon_i and carbon_bau
+    # use this one for carbon_i and carbon_bau
     calculate_agb_growth(scenario=scenario, years=years)
     
     carbon_i = get_carbon_stock(data, scenario=scenario, carbon_time_id="carbon_i")
