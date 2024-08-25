@@ -5,10 +5,10 @@
 # ***********************************************************************************************************/
 
 # /**********************************************************************************************************
-# Filename: ARR_test.py
+# Filename: ARR_final.py
 # Author: Barbara Bomfim
 # Date Started: 06/28/2024
-# Last Edited: 08/08/2024
+# Last Edited: 25/08/2024
 # Purpose: AFOLU GHG Calculations for Afforestation/Reforestation (A/R) Interventions
 # **********************************************************************************************************/
 
@@ -929,8 +929,8 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
 
         results_unc[f"N2O_{aoi_id}"].append(N2O)
         
-        #TODO: CH4 calculation needed
-        #FIXME: need to incorporeate fire management 
+        #Edit to include: CH4 calculation
+
         # Add change in N2O due to fire management
         # if "change in fire management" in intervention_subcategory:
         #     fire_n2o_ef = np.random.normal(temp_bau['burning_n2o_ef_mean'].values[0], temp_bau['burning_n2o_ef_sd'].values[0])
@@ -953,7 +953,7 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
         #         results_unc[m, 4 + np.array(fire_yrs_int)] += fireN2O_int
 
         
-        #FIXME: need to incorporeate fire management 
+        #Edit if incorporating fire management 
         # # emissions from fire management
         # if "change in fire management" in intervention_subcategory:
         #     fire_ch4_ef = np.random.normal(temp_bau['burning_ch4_ef_mean'].values[0], temp_bau['burning_ch4_ef_sd'].values[0])
