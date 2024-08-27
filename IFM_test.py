@@ -994,7 +994,7 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
       
 
     # column_names = ['AOI', 'Area', 'Rep', 'SOC', 'totalC', f'N2O_y{aoi_id}', f'CH4_y{aoi_id}']
-    results_unc_df = pd.DataFrame(results_unc)
+        results_unc_df = pd.DataFrame(results_unc)
     return results_unc_df
 
 
