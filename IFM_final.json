@@ -1,6 +1,6 @@
 {
   "intervention_type": "Improved Forest Management",
-  "intervention_subcategory": "Stop logging, Reduced impact logging, Extended forest rotation",
+  "intervention_subcategory": "reduced impact logging, extended rotation, stop logging",
   "scenarios": {
     "common": [
       {
@@ -28,6 +28,8 @@
         "AHA": "500",
         "VolExt": "20",
         "C_timber": "0.55",
+        "prop_ox": "0.25",
+        "prop_ox_long": "0.947",
         "r_w": "0.24",
         "SkidsFactor": "0.127",
         "RoadsDecksFactor": "0.503",
@@ -35,7 +37,7 @@
         "LDF_factor_2": "1.7817",
         "ElE_factor_1": "0.4924",
         "ElE_factor_2": "0.0158",
-        "RL": "10",
+        "RLbau": "10",
         "GR": "1",
         "BEF": "3",
         "half_life_wp": "6",
@@ -110,6 +112,8 @@
         "AHA": "500",
         "VolExt": "20",
         "C_timber": "0.55",
+        "prop_ox": "0.25",
+        "prop_ox_long": "0.947",
         "r_w": "0.24",
         "SkidsFactor": "0.47",
         "RoadsDecksFactor": "0.65",
@@ -117,7 +121,7 @@
         "LDF_factor_2": "1.7817",
         "ElE_factor_1": "0.4924",
         "ElE_factor_2": "0.0158",
-        "RL": "15",
+        "RLint": "15",
         "GR": "1",
         "BEF": "3",
         "half_life_wp": "6",
