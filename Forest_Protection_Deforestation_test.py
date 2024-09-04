@@ -8,15 +8,14 @@
 # Filename: Forest_Protection_Deforestation_test.py
 # Author: Barbara Bomfim
 # Date Started: 07/11/2024
-# Last Edited: 07/19/2024 (Anthony D'Agostino)
+# Last Edited: 09/03/2024
 # Purpose: AFOLU GHG Calculations for Forest Protection from Deforestation (FP) Interventions
-# Updates:
-#      7/19/2024 - switch from L4A to L4B as AGB source
 # **********************************************************************************************************/
 
 #### Required Inputs ####
 # Climate zone and soil type: These are contained in the geography_mask_area_info json
 #   file, which sources data_FP from Dynamic World land use data_FP,  data_FP layers
+#
 # User inputs: User inputs depend on sub-intervention category (planted or natural forest; 
 #  tillage; nutrient management; fire management). 
 #   - Initial:
@@ -26,7 +25,7 @@
 #           -tillage_type: Full Till, Reduced Till, No Till, Unknown
 #           -ag_inputs: Low, Medium, High without manure, High with manure, Unknown
 #           -fire_used: yes, no
-#.  -Baseline data_FP:
+#.  -Baseline data:
 #           -deforested_land_area: area under business-as-usual land use (deforestation)
 #           -deforestation_rate_pre: Deforestation rate (in %/yr) before intervention, based on published data_FP (e.g., global forest watch)
 #           -forest_type_deforestation: forest type prior to deforestation
@@ -40,7 +39,6 @@
 #           -tillage_type: Full Till, Reduced Till, No Till, Unknown
 #           -ag_inputs: Low, Medium, High without manure, High with manure, Unknown
 #           -illegal_logging_rate: volume timber over bark extracted illegally each year (m3 ha-1 yr-1)
-#           -D: wood density (t/m3)
 #  -Intervention requires:
 #           -forest_area: forest area that is being protected
 #           -forest_type: selection from dropdown list
@@ -49,7 +47,6 @@
 #.          -fire_incidence_rate: default annual average fire incidence rate (0.1) but can be calculated as the average of the years of available data_FP. 
 #               Calculate fraction of forest (by land cover data_FP) that had burned each year to get the annual fire incidence rate.
 #           -bio_ef: gCO2 per kg of dry matter burnt
-#           -D: wood density (t/m3)
 
 #### Parameters and Paths ####
 # Calculations requires the following parameters and their associated uncertainty:
@@ -125,7 +122,7 @@ from helpersFP import convert_to_c, convert_to_co2e, convert_to_bgb, get_carbon_
 
 ### STEP 1 - Estimate mean annual AGB (in Mg/ha) using GEDI data_FPset ####
 # GEE path: https://code.earthengine.google.com/?scriptPath=users%2Fbabomfimf%2FAGB-GEDI-L4A%3Atest-3_AGB_annual_mean
-## Anthony's GEE: for Persistent: `021_extract_SOC_and_AGB.js` in the `AFOLU` shared GEE Scripts library (for others: https://code.earthengine.google.com/44d6aaa5db4764b5b5f3825baf900d04)
+## Anthony's GEE: https://code.earthengine.google.com/44d6aaa5db4764b5b5f3825baf900d04
 
 #if this doesn't work authenticate from the command line  by running `earthengine authenticate`
 ee.Authenticate()
@@ -144,21 +141,29 @@ polygon_vertices = [
 polygon = ee.Geometry.Polygon(polygon_vertices)
 
 # Access the GEDI L4A Monthly data_FPset
-gedi_l4b = ee.Image('LARSE/GEDI/GEDI04_B_002')
-              
-# Filter the collection to your polygon
-filtered_gedi = gedi_l4b.filterBounds(polygon)
+gedi_l4a_monthly = ee.ImageCollection('LARSE/GEDI/GEDI04_A_002_MONTHLY')
+
+# Filter the collection to your polygon and a wider time range
+filtered_gedi = gedi_l4a_monthly.filterBounds(polygon).filterDate('2019-01-01', '2020-01-01')#for bau, starts as far back as possible until just before intervention starts
 # Filter agbd
-agbd_image = filtered_gedi.select('MU')
+agbd_band = filtered_gedi.select('agbd')
+# Calculate annual mean
+agbd_image = agbd_band.reduce(ee.Reducer.mean())
 
 # Compute the mean annual AGBD value for the entire polygon
 average_agbd = agbd_image.reduceRegion(
     reducer=ee.Reducer.mean(),
     geometry=polygon,
-    scale=1000  # Scale should match the resolution of the data_FPset
+    scale=25  # Scale should match the resolution of the data_FPset
 )
 average_agbd_dict = average_agbd.getInfo()
 print(f"{average_agbd_dict} Mg/ha")
+
+average_agbd = agbd_image.reduceRegion(
+    reducer=ee.Reducer.mean(),
+    geometry=polygon,
+    scale=25  # Scale should match the resolution of the data_FPset
+)
 
 print("\nArea of the polygon:")
 print(f"{polygon.area().getInfo()/10000} ha") # to get area in hectares
@@ -171,9 +176,9 @@ maskedArea_ha = polygon.area().getInfo()/10000
 current_directory = os.getcwd()
 print("Current working directory:", current_directory)
 # Define the relative file path
-file_name_FP = 'FP_test.json'
+file_name_FP = 'FP_final.json'
 file_path_FP = os.path.join(current_directory, file_name_FP)
-json_file_path_FP = './FP_test.json'
+json_file_path_FP = './FP_final.json'
 
 # Load data_FP from the JSON file
 with open(file_path, 'r') as file:
@@ -225,7 +230,9 @@ def mean_annual_agc_stock(scenario, log_level='info'):
 def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
     global data
     
-    scenario_data = data["scenarios"][scenario][0]
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+
     ratio = scenario_data["ratio_below_ground_biomass_to_above_ground_biomass"]
     
     total_results = []
@@ -290,7 +297,8 @@ def calculate_historical_deforestation_rate(total_results, scenario, log_level='
         print(f"  Historical Deforestation Rate: {historical_def_rate:.2f} %/yr")
     
     return total_results
-
+  
+  
 # Define equation to calculate Baseline Deforested Area
 def calculate_deforested_area_yeari(total_results, scenario, log_level='info'):
     global data
@@ -316,7 +324,7 @@ def calculate_deforested_area_yeari(total_results, scenario, log_level='info'):
         print(f"  Deforested Area year i: {deforested_area_yeari:.2f} ha/yr")
     
     return total_results
-
+  
 # Define equation to calculate Baseline Total Biomass Carbon Stock Loss
 def calculate_carbon_stock_loss_yeari(total_results, scenario, log_level='info'):
     global data
@@ -425,9 +433,9 @@ def calculate_actual_area_deforested_year_n(total_results, scenario, log_level='
     })
         
     if log_level == 'debug':
-        print(f"Subregion {total_results['aoi_id']}:")
-        print(f"actual_area_deforested_year_n: {actual_area_deforested_year_n:.2f} ha/yrr")
-        print(f"forest_area_end_of_year_n: {forest_area_end_of_year_n:.2f} ha/yrr")
+    print(f"Subregion {total_results['aoi_id']}:")
+    print(f"actual_area_deforested_year_n: {actual_area_deforested_year_n:.2f} ha/yrr")
+    print(f"forest_area_end_of_year_n: {forest_area_end_of_year_n:.2f} ha/yrr")
 
     return total_results
 
@@ -454,8 +462,8 @@ def calculate_area_avoided_deforestation_year_n(total_results, scenario, log_lev
     })
         
     if log_level == 'debug':
-        print(f"Subregion {total_results['aoi_id']}:")
-        print(f"forest_area_end_of_year: {forest_area_end_of_year:.2f} ha/yrr")
+    print(f"Subregion {total_results['aoi_id']}:")
+    print(f"forest_area_end_of_year: {forest_area_end_of_year:.2f} ha/yrr")
     
     return total_results
 
@@ -486,10 +494,11 @@ def calculate_avoided_emissions_trees_each_year(total_results, scenario, log_lev
          })
         
         if log_level == 'debug':
-            print(f"Subregion {total_results['aoi_id']}:")
-            print(f"avoided_emissions_trees: {avoided_emissions_trees:.2f} tCO2/yr")
+        print(f"Subregion {total_results['aoi_id']}:")
+        print(f"avoided_emissions_trees: {avoided_emissions_trees:.2f} tCO2/yr")
      
         return total_results
+
 
 ######Calculate all - equations for baseline and intervention emissions calculation
 def calculate_all(scenario, log_level='info'):
@@ -624,6 +633,19 @@ def load_json_data(file_path):
 
 ###############################################################
 
+def average_results_sims(input_dict):
+    results_unc = {}
+    for key, value in input_dict.items():
+        if isinstance(value, list):
+            if value:  # Check if the list is not empty
+                average = sum(value) / len(value)
+                results_unc[key] = average
+            else:
+                results_unc[key] = 0  # or None, for empty lists
+        else:
+            results_unc[key] = value  # Keep non-list values as they are
+    return results_unc
+  
 def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
     
     temp_bau = df[(df['aoi_id'] == aoi_id) & (df['scenario'] == "business-as-usual")]
@@ -633,12 +655,12 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
     
     results_unc['AOI'] = aoi_id
     results_unc['Area'] = temp_bau['area'].values[0]
-    results_unc['Rep'] = np.arange(1, nx + 1)
     results_unc['SOC'] = []
     results_unc['totalC'] = []
-    results_unc[f'N2O_{aoi_id}'] = []
-    results_unc[f'CH4_{aoi_id}'] = []
-     
+    #results_unc[f'N2O_{aoi_id}'] = [] # soil N2O emissions not included in this intervention
+    # this needs to be calculated with fire management below
+    # CH4 calculation needed
+    # results_unc[f'CH4_{aoi_id}'] = []
     
     for m in range(nx):
         # SOC Stock Change
@@ -655,88 +677,24 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
         results_unc["SOC"].append(dSOC)
 
         # here we add the biomass specific to the aoi_id
-        # NOTE: this number is too large check please
-        results_unc["totalC"].append(dSOC * 44/12 + biomass_co2_result[aoi_id]) 
+        results_unc["totalC"].append(dSOC * 44/12 + biomass_co2_result[aoi_id])
 
-        # N2O emissions
-        # Calculate change in N sources
-        FSN = (temp_int['n_fertilizer_amount'].values[0] * temp_int['n_fertilizer_percent'].values[0] / 100 -
-               temp_bau['n_fertilizer_amount'].values[0] * temp_bau['n_fertilizer_percent'].values[0] / 100) if "nutrient management" in intervention_subcategory else 0
-        FON = (temp_int['org_amend_rate'].values[0] * temp_int['org_amend_npercent'].values[0] / 100 -
-               temp_bau['org_amend_rate'].values[0] * temp_bau['org_amend_npercent'].values[0] / 100) if "nutrient management" in intervention_subcategory else 0
-        FSOM = dSOC / 10 * 1000  # FSOM
-        if "change in livestock type or stocking rate" in intervention_subcategory:
-            FPRP = (temp_int['live_weight'].values[0] * temp_int['Nex'].values[0] * temp_int['stocking_rate'].values[0] -
-                    temp_bau['live_weight'].values[0] * temp_bau['Nex'].values[0] * temp_bau['stocking_rate'].values[0]) / 1000 * 365
-        else:
-            FPRP = 0
-
-        # Calculate N emissions
-        EFdir = np.random.normal(temp_bau['ef_direct_n2o'].values[0], temp_bau['ef_direct_n2o_sd'].values[0])
-        FRAC_GASF = np.random.normal(temp_bau['frac_syn_fert'].values[0], temp_bau['frac_syn_fert_sd'].values[0])
-        FRAC_GASM = np.random.normal(temp_bau['frac_org_fert'].values[0], temp_bau['frac_org_fert_sd'].values[0])
-        EF_vol = np.random.normal(temp_bau['ef_vol'].values[0], temp_bau['ef_vol_sd'].values[0])
-        FRAC_LEACH = np.random.normal(temp_bau['frac_leach'].values[0], temp_bau['frac_leach_sd'].values[0])
-        EF_leach = np.random.normal(temp_bau['ef_leaching'].values[0], temp_bau['ef_leaching_sd'].values[0])
-        EF_PRP = np.random.normal(temp_bau['ef_prp'].values[0], temp_bau['ef_prp_sd'].values[0])
-        dirN = (FSN + FON + FSOM) * EFdir + FPRP * EF_PRP  # Direct emissions
-        volN = (FSN * FRAC_GASF + (FON + FPRP) * FRAC_GASM) * EF_vol  # Indirect volatilization
-        leachN = (FSN + FON + FSOM + FPRP) * FRAC_LEACH * EF_leach  # indirect leaching
-        N2O = (dirN + volN + leachN) / 1000 * 44 / 28  # sum and convert to tN2O
-
-        results_unc[f"N2O_{aoi_id}"].append(N2O)
-        
-        #FIXME: add if incorporating fire 
-        # Add change in N2O due to fire management
-        # if "change in fire management" in intervention_subcategory:
-        #     fire_n2o_ef = np.random.normal(temp_bau['burning_n2o_ef_mean'].values[0], temp_bau['burning_n2o_ef_sd'].values[0])
-        #     # Add fires for bau scenario
-        #     if temp_bau['fire_used'].values[0] == "True":
-        #         CF_bau = np.random.normal(temp_bau['combustion_factor_mean'].values[0], temp_bau['combustion_factor_sd'].values[0])
-        #         MB_bau = np.random.normal(temp_bau['fuel_biomass_mean'].values[0], temp_bau['fuel_biomass_sd'].values[0])
-        #         fireN2O_bau = MB_bau * CF_bau * fire_n2o_ef / 1000
-        #         N2O = N2O - fireN2O_bau
-        #         fire_per_bau = temp_bau['fire_management_years'].values[0]
-        #         fire_yrs_bau = [y for y in range(1, 20) if y % fire_per_bau == 0]
-        #         results_unc[m, 4 + np.array(fire_yrs_bau)] = N2O - fireN2O_bau
-        #     if temp_int['fire_used'].values[0] == "True":
-        #         CF_int = np.random.normal(temp_int['combustion_factor_mean'].values[0], temp_int['combustion_factor_sd'].values[0])
-        #         MB_int = np.random.normal(temp_int['fuel_biomass_mean'].values[0], temp_int['fuel_biomass_sd'].values[0])
-        #         fireN2O_int = MB_int * CF_int * fire_n2o_ef / 1000
-        #         results_unc[m, 4] += fireN2O_int
-        #         fire_per_int = temp_int['fire_management_years'].values[0]
-        #         fire_yrs_int = [y for y in range(1, 20) if y % fire_per_int == 0]
-        #         results_unc[m, 4 + np.array(fire_yrs_int)] += fireN2O_int
-
-        
-        #FIXME: add if incorporating fire
-        # # emissions from fire management
-        # if "change in fire management" in intervention_subcategory:
-        #     fire_ch4_ef = np.random.normal(temp_bau['burning_ch4_ef_mean'].values[0], temp_bau['burning_ch4_ef_sd'].values[0])
-        #     # Add fires for bau scenario
-        #     if temp_bau['fire_used'].values[0] == "True":
-        #         fireCH4_bau = MB_bau * CF_bau * fire_ch4_ef / 1000
-        #         results_unc[m, 24] = CH4_live - fireCH4_bau
-        #         results_unc[m, 24 + np.array(fire_yrs_bau)] = CH4_live - fireCH4_bau
-        #     if temp_int['fire_used'].values[0] == "True":
-        #         fireCH4_int = MB_int * CF_int * fire_ch4_ef / 1000
-        #         results_unc[m, 24] += fireCH4_int
-        #         results_unc[m, 24 + np.array(fire_yrs_int)] += fireCH4_int
-
+        # N2O emissions not included in this intervention
+        # results_unc[f"N2O_{aoi_id}"].append(N2O)
+        # 
 
     # column_names = ['AOI', 'Area', 'Rep', 'SOC', 'totalC', f'N2O_y{aoi_id}', f'CH4_y{aoi_id}']
+    print("UNC", results_unc)
     results_unc_df = pd.DataFrame(results_unc)
     return results_unc_df
 
-
 def generate_output():
     global biomass_co2_result
-    json_data, df, AOIs, intervention_subcategory = load_json_data('FP_test.json')
+    json_data, df, AOIs, intervention_subcategory = load_json_data('FP_final.json')
     
     # Run Monte Carlo simulations
     np.random.seed(1)
     mc = [GHGcalc(aoi_id, df, 1000, intervention_subcategory, biomass_co2_result) for aoi_id in AOIs]
-
 
     # Process results
     result_list = []
@@ -753,14 +711,13 @@ def generate_output():
         
         result_list.append(result_dict)
 
-
     # Convert the list of dictionaries to a DataFrame
     result_df = pd.DataFrame(result_list)
 
     print(result_df.columns)
 
     # result_df has the following columns with aoi_id baked in
-    # TODO: Need to roll them up for totals as well instead of aoi_id
+    # Run code below to roll them up for totals as well instead of aoi_id
     # Index(['AOI', 'Area', 'Rep', 'SOC', 'SOC_sd', 'totalC', 'totalC_sd',
     #    'N2O_tropicalmoist_acrisols', 'N2O_tropicalmoist_acrisols_sd',
     #    'CH4_tropicalmoist_acrisols', 'CH4_tropicalmoist_acrisols_sd',
@@ -769,26 +726,26 @@ def generate_output():
     #   dtype='object')
     
     # Summing specific columns
-    result_df['N2O_thayr'] = result_df['N2O_tropicalmoist_acrisols'] + result_df['N2O_tropicalmoist_ferralsols']
-    result_df['sdN2Oha'] = result_df['N2O_tropicalmoist_acrisols_sd'] + result_df['N2O_tropicalmoist_ferralsols_sd']
-    result_df['CH4_thayr'] = result_df['CH4_tropicalmoist_acrisols'] + result_df['CH4_tropicalmoist_ferralsols']
-    result_df['sdCH4ha'] = result_df['CH4_tropicalmoist_acrisols_sd'] + result_df['CH4_tropicalmoist_ferralsols_sd']
+    #result_df['N2O_thayr'] = result_df['N2O_tropicalmoist_acrisols'] + result_df['N2O_tropicalmoist_ferralsols']
+    #result_df['sdN2Oha'] = result_df['N2O_tropicalmoist_acrisols_sd'] + result_df['N2O_tropicalmoist_ferralsols_sd']
+    # result_df['CH4_thayr'] = result_df['CH4_tropicalmoist_acrisols'] + result_df['CH4_tropicalmoist_ferralsols']
+    # result_df['sdCH4ha'] = result_df['CH4_tropicalmoist_acrisols_sd'] + result_df['CH4_tropicalmoist_ferralsols_sd']
     result_df['CO2_thayr'] = result_df['SOC'] + result_df['totalC']
     result_df['sdCO2ha'] = result_df['SOC_sd'] + result_df['totalC_sd']
     result_df['CO2_tyr'] = result_df['CO2_thayr'] * result_df['Area']
     result_df['sdCO2'] = result_df['sdCO2ha'] * result_df['Area']
-    result_df['N2O_tyr'] = result_df['N2O_thayr'] * result_df['Area']
-    result_df['sdN2O'] = result_df['sdN2Oha'] * result_df['Area']
-    result_df['CH4_tyr'] = result_df['CH4_thayr'] * result_df['Area']
-    result_df['sdCH4'] = result_df['sdCH4ha'] * result_df['Area']
+    #result_df['N2O_tyr'] = result_df['N2O_thayr'] * result_df['Area']
+    #result_df['sdN2O'] = result_df['sdN2Oha'] * result_df['Area']
+    # result_df['CH4_tyr'] = result_df['CH4_thayr'] * result_df['Area']
+    # result_df['sdCH4'] = result_df['sdCH4ha'] * result_df['Area']
 
     # Drop the individual columns after summing
     result_df = result_df.drop(columns=[
         'SOC', 'totalC', 'SOC_sd', 'totalC_sd',
-        'N2O_tropicalmoist_acrisols', 'N2O_tropicalmoist_ferralsols',
-        'N2O_tropicalmoist_acrisols_sd', 'N2O_tropicalmoist_ferralsols_sd',
-        'CH4_tropicalmoist_acrisols', 'CH4_tropicalmoist_ferralsols',
-        'CH4_tropicalmoist_acrisols_sd', 'CH4_tropicalmoist_ferralsols_sd'
+        # 'N2O_tropicalmoist_acrisols', 'N2O_tropicalmoist_ferralsols',
+        # 'N2O_tropicalmoist_acrisols_sd', 'N2O_tropicalmoist_ferralsols_sd',
+        # 'CH4_tropicalmoist_acrisols', 'CH4_tropicalmoist_ferralsols',
+        # 'CH4_tropicalmoist_acrisols_sd', 'CH4_tropicalmoist_ferralsols_sd'
     ])
 
     # Aggregate the DataFrame by summing up the columns
@@ -805,17 +762,16 @@ def generate_output():
     # 
     #NOTE: this is creating all the columns only with projections from year 1 up to you year 20
     column_names = ['AOI', 'Area', 'CO2_thayr'] + \
-                   [f'N2O_thayr_y{i}' for i in range(1, 21)] + \
-                   [f'CH4_thayr_y{i}' for i in range(1, 21)] + \
+                   # [f'N2O_thayr_y{i}' for i in range(1, 21)] + \
                    ['sdCO2ha'] + [f'sdN2Oha_y{i}' for i in range(1, 21)] + \
-                   [f'sdCH4ha_y{i}' for i in range(1, 21)] + \
                    ['CO2_tyr'] + [f'N2O_tyr_y{i}' for i in range(1, 21)] + \
-                   [f'CH4_tyr_y{i}' for i in range(1, 21)] + \
-                   ['sdCO2'] + [f'sdN2O_y{i}' for i in range(1, 21)] + \
-                   [f'sdCH4_y{i}' for i in range(1, 21)]
+                   ['sdCO2'] + [f'sdN2O_y{i}' for i in range(1, 21)]
+                   # [f'CH4_thayr_y{i}' for i in range(1, 21)] + \
+                   # [f'sdCH4ha_y{i}' for i in range(1, 21)] + \
+                   # [f'CH4_tyr_y{i}' for i in range(1, 21)] + \
+                   # [f'sdCH4_y{i}' for i in range(1, 21)]
 
-    #TODO: need to create a naming above
-    resdf = pd.DataFrame(resdf, columns=column_names)
+    resdf = pd.DataFrame(result_df, columns=column_names)
 
     #NOTE: setting the numbers for projections
     # # Convert to JSON output
@@ -828,41 +784,39 @@ def generate_output():
             'sdCO2ha': [resdf.iloc[r]['sdCO2ha']] * 20,
             'CO2_tyr': [resdf.iloc[r]['CO2_tyr']] * 20,
             'sdCO2': [resdf.iloc[r]['sdCO2']] * 20,
-            'N2O_thayr': resdf.iloc[r][[f'N2O_thayr_y{i}' for i in range(1, 21)]].tolist(),
-            'sdN2Oha': resdf.iloc[r][[f'sdN2Oha_y{i}' for i in range(1, 21)]].tolist(),
-            'N2O_tyr': resdf.iloc[r][[f'N2O_tyr_y{i}' for i in range(1, 21)]].tolist(),
-            'sdN2O': resdf.iloc[r][[f'sdN2O_y{i}' for i in range(1, 21)]].tolist(),
-            'CH4_thayr': resdf.iloc[r][[f'CH4_thayr_y{i}' for i in range(1, 21)]].tolist(),
-            'sdCH4ha': resdf.iloc[r][[f'sdCH4ha_y{i}' for i in range(1, 21)]].tolist(),
-            'CH4_tyr': resdf.iloc[r][[f'CH4_tyr_y{i}' for i in range(1, 21)]].tolist(),
-            'sdCH4': resdf.iloc[r][[f'sdCH4_y{i}' for i in range(1, 21)]].tolist()
+            # 'N2O_thayr': resdf.iloc[r][[f'N2O_thayr_y{i}' for i in range(1, 21)]].tolist(),
+            # 'sdN2Oha': resdf.iloc[r][[f'sdN2Oha_y{i}' for i in range(1, 21)]].tolist(),
+            # 'N2O_tyr': resdf.iloc[r][[f'N2O_tyr_y{i}' for i in range(1, 21)]].tolist(),
+            # 'sdN2O': resdf.iloc[r][[f'sdN2O_y{i}' for i in range(1, 21)]].tolist(),
+            # 'CH4_thayr': resdf.iloc[r][[f'CH4_thayr_y{i}' for i in range(1, 21)]].tolist(),
+            # 'sdCH4ha': resdf.iloc[r][[f'sdCH4ha_y{i}' for i in range(1, 21)]].tolist(),
+            # 'CH4_tyr': resdf.iloc[r][[f'CH4_tyr_y{i}' for i in range(1, 21)]].tolist(),
+            # 'sdCH4': resdf.iloc[r][[f'sdCH4_y{i}' for i in range(1, 21)]].tolist()
         }
         restib.append(aoi_dict)
 
     # Write the DataFrame to a CSV file
-    result_df.to_csv('output\Forest_Protection_Deforestation_test_result.csv', index=False)
+    result_df.to_csv('result.csv', index=False)
     # 
-    # #TODO: need to create a json file from result_df 
-    # json_output = json.dumps(result_df, indent=2)
+    json_output = json.dumps(result_df.to_dict(orient='records'), indent=2)
     # 
-    # #TODO: uncomment this part to create the file with santized output
     # # # Ensure the output directory exists
-    # output_dir = 'output'
-    # os.makedirs(output_dir, exist_ok=True)
+    output_dir = 'output'
+    os.makedirs(output_dir, exist_ok=True)
     # 
     # # Write the JSON output
-    # sanitized_filename = 'output_file.json'  # Replace with actual filename sanitization if needed
-    # output_file = os.path.join(output_dir, sanitized_filename)
-    # with open(output_file, 'w') as f:
-    #     json.dump(json_data, f, indent=4)
+    sanitized_filename = 'output_file.json'  # Replace with actual filename sanitization if needed
+    output_file = os.path.join(output_dir, sanitized_filename)
+    with open(output_file, 'w') as f:
+        json.dump(json_data, f, indent=4)
 
-    # sanitized = sanitize_filename(f'{intervention_subcategory}.json')
+    sanitized = sanitize_filename(f'{intervention_subcategory}.json')
     # 
     # # # Write the JSON output
-    # output_file = os.path.join(output_dir, sanitized)
-    # with open(output_file, 'w') as f:
-    #    f.write(json_output)
+    output_file = os.path.join(output_dir, sanitized)
+    with open(output_file, 'w') as f:
+       f.write(json_output)
 
-    #print(f"\n\nGenerated file: {sanitized_filename} in the output folder.")
+    print(f"\n\nGenerated file: {sanitized_filename} in the output folder.")
 
-generate_output()
+generate_output(json_file_path)
