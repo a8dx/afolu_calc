@@ -190,7 +190,7 @@ def mean_annual_agc_stock(scenario, log_level='info'):
     
     subregion_results = []
     for subregion in scenario_data["aoi_subregions"]:
-        subregion_area = subregion["area"]
+        subregion_area = int(subregion["area"])
         subregion_fraction = subregion_area / area_converted_yr
         
         subregion_agbd_tco2e = average_agbd_tco2e * subregion_fraction
@@ -284,7 +284,7 @@ def calculate_agb_growth(scenario, years, log_level='info'):
 
     for subregion in subregions:
         aoi_id = subregion["aoi_id"]
-        area = subregion["area"]
+        area = int(subregion["area"])
         
         agb_rc = chapman_richards_agb(time, alpha, beta, rate, slope)
         
@@ -331,7 +331,7 @@ def calculate_annual_co2_impact(scenario, years, average_agbd_tco2e, log_level='
     
     for i, subregion in enumerate(carbon_i):
         aoi_id = subregion["aoi_id"]
-        area = subregion["area"]
+        area = int(subregion["area"])
         
         carbon_i_co2e = convert_to_co2e(subregion["carbon_stock"]) #FIX ME - this needs to be from output of previous function
         # retrive based on aoi_id subregion level
@@ -384,7 +384,7 @@ def estimate_co2_conversion(scenario, log_level='info'):
     
     for subregion in aoi_subregions:
         aoi_id = subregion["aoi_id"]
-        area = subregion["area"]
+        area = int(subregion["area"])
         
         agb_month_after = scenario_data.get("agb_month_after")
         agb_month_after_co2e = convert_to_co2e(agb_month_after)
@@ -445,7 +445,7 @@ def calculate_lwood_removals(scenario, log_level='debug'):
     
     for subregion in aoi_subregions:
         aoi_id = subregion["aoi_id"]
-        area = subregion["area"]
+        area = int(subregion["area"])
         
         H = scenario_data.get("H")
         BCEFr = scenario_data.get("BCEFr")
@@ -502,7 +502,7 @@ def calculate_lfuelwood(scenario, log_level='info'):
     
     for subregion in aoi_subregions:
         aoi_id = subregion["aoi_id"]
-        area = subregion["area"]
+        area = int(subregion["area"])
         
         FGtrees = scenario_data.get("FGtrees")
         FGpart = scenario_data.get("FGpart")
@@ -552,7 +552,7 @@ def calculate_ldisturbance(scenario, log_level='info'):
     
     for subregion in aoi_subregions:
         aoi_id = subregion["aoi_id"]
-        area = subregion["area"]
+        area = int(subregion["area"])
         
         Adisturbance = scenario_data.get("Adisturbance")
         Bw = scenario_data.get("Bw")
@@ -966,7 +966,7 @@ def GHGcalc(aoi_id, df, nx, intervention_subcategory, biomass_co2_result):
 
 
     # column_names = ['AOI', 'Area', 'Rep', 'SOC', 'totalC', f'N2O_y{aoi_id}', f'CH4_y{aoi_id}']
-    print("UNC", results_unc)
+    # print("UNC", results_unc)
     results_unc_df = pd.DataFrame(results_unc)
     return results_unc_df
 
@@ -1036,7 +1036,7 @@ def generate_output(input_json):
     totals = result_df.sum(numeric_only=True).to_frame().transpose()
     totals['AOI'] = 'Total'
     totals['Rep'] = 'Total'
-    result_df = result_df.append(totals, ignore_index=True)
+    result_df = pd.concat([result_df, totals], ignore_index=True)
 
     # Reorder columns to place 'AOI' first
     cols = ['AOI', 'Rep'] + [col for col in result_df.columns if col not in ['AOI', 'Rep']]
@@ -1091,7 +1091,7 @@ def generate_output(input_json):
     os.makedirs(output_dir, exist_ok=True)
     # 
     # # Write the JSON output
-    sanitized_filename = 'output_file.json'  # Replace with actual filename sanitization if needed
+    sanitized_filename = 'ARR_output_file.json'  # Replace with actual filename sanitization if needed
     output_file = os.path.join(output_dir, sanitized_filename)
     with open(output_file, 'w') as f:
         json.dump(json_data, f, indent=4)
