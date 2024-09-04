@@ -635,12 +635,12 @@ def generate_output():
     # Process results
     result_list = []
     for iteration in mc:
-        aoi_id = iteration['AOI'].iloc[0]  # Assuming 'AOI' is constant for each iteration
+        aoi_id = iteration['AOI']  # Assuming 'AOI' is constant for each iteration
         result_dict = {'AOI': aoi_id}
         
-        for column in iteration.columns:
+        for column in iteration.keys():
             if column in ['AOI', 'Area', 'Rep']:
-                result_dict[column] = iteration[column].iloc[0]  # Assuming these are constant for each iteration
+                result_dict[column] = iteration[column]  # Assuming these are constant for each iteration
             else:
                 result_dict[column] = iteration[column].mean()
                 result_dict[column+'_sd'] = iteration[column].std()
