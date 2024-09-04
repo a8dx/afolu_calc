@@ -8,7 +8,7 @@
 # Filename: IFM_final.py
 # Author: Barbara Bomfim
 # Date Started: 07/14/2024
-# Last Edited: 08/25/2024
+# Last Edited: 09/03/2024
 # Purpose: AFOLU GHG Calculations for Improved Forest Management Interventions (RIL and Extended Rotation)
 # **********************************************************************************************************/
 
@@ -507,7 +507,6 @@ for aoi_id, difference in biomass_co2_result.items():
     # Calculate SD for each aoi_id
     sd = (abs(difference) * biomass_co2_result_error_positive / 100) / 1.96
     biomass_co2_sd[aoi_id] = sd
-    
     
     
 ####### EXTENDED ROTATION INTERVENTION ##########
