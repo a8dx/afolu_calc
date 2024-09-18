@@ -442,7 +442,7 @@ def estimate_co2_conversion(scenario, log_level='info'):
 
 ### Step 6 #### Calculate Annual Decrease in Biomass Stock ####
 
-## Estimate ∆CL using Equation 2.11: ∆CL = Lwood−removals + Lfuelwood + Ldisturbance
+## Estimate ∆CL using Equation 2.11: ∆CL = Lwood −removals + Lfuelwood + Ldisturbance
 # Lwood-removals = annual carbon loss due to wood removals, tonnes C yr-1 (Equation 2.12) 
 # Lfuelwood = annual biomass carbon loss due to fuelwood removals, tC/yr (Equation 2.13)
 # Ldisturbance = annual biomass carbon losses due to disturbances, tonnes C yr-1 (See Equation 2.14)
@@ -741,7 +741,122 @@ def calculate_annual_change_in_carbon_stocks(delta_CG_results, delta_co2_convers
 
 ### Step 8: Calculate all ARR variables ####
 
-### Define equation to calculate all calculation steps using equations defined above
+# ## Define equation to calculate all calculation steps using equations defined above
+# def calculate_all(scenario, log_level='info'):
+#     result = {}
+#     
+#     average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario, log_level=log_level)
+#     result["average_agbd_tco2e"] = average_agbd_tco2e
+#     
+#     mean_annual_tot_c_stock_result = mean_annual_tot_c_stock(average_agbd_tco2e, scenario=scenario, log_level=log_level)
+#     result["mean_annual_tot_c_stock"] = mean_annual_tot_c_stock_result
+#     
+#     delta_CG = calculate_annual_co2_impact(scenario=scenario, years=20, average_agbd_tco2e=average_agbd_tco2e, log_level=log_level)
+#     result["delta_CG"] = delta_CG
+#     
+#     delta_co2_conversion = estimate_co2_conversion(scenario=scenario, log_level=log_level)
+#     result["delta_co2_conversion"] = delta_co2_conversion
+#     
+#     # Calculate Lwood-removals
+#     lwood_removals = calculate_lwood_removals(scenario=scenario, log_level=log_level)
+#     result["lwood_removals"] = lwood_removals
+#     if log_level == 'debug':
+#         print(f"Annual biomass carbon loss due to wood removals (Lwood-removals): {lwood_removals} tCO2e/yr")
+#     
+#     # Calculate Lfuelwood
+#     lfuelwood = calculate_lfuelwood(scenario=scenario, log_level=log_level)
+#     result["lfuelwood"] = lfuelwood
+#     if log_level == 'debug':
+#         print(f"Annual biomass carbon loss due to fuelwood removals (Lfuelwood): {lfuelwood} tCO2e/yr")
+#     
+#     # Calculate Ldisturbance
+#     ldisturbance = calculate_ldisturbance(scenario=scenario, log_level=log_level)
+#     result["ldisturbance"] = ldisturbance
+#     if log_level == 'debug':
+#         print(f"Annual biomass carbon losses due to disturbances (Ldisturbance): {ldisturbance} tCO2e/yr")
+#     
+#     # Calculate ∆CL
+#     delta_cl = calculate_delta_cl(lwood_removals, lfuelwood, ldisturbance, log_level=log_level)
+#     result["delta_cl"] = delta_cl
+#     if log_level == 'debug':
+#         print(f"Biomass stock Loss (∆CL): {delta_cl} tCO2e/yr")
+#     
+#     # Calculate ∆CB - the annual change in carbon stocks
+#     annual_change_in_carbon_stocks = calculate_annual_change_in_carbon_stocks(delta_CG, delta_co2_conversion, delta_cl, log_level=log_level)
+#     result["annual_change_in_carbon_stocks"] = annual_change_in_carbon_stocks
+#     if log_level == 'debug':
+#         print(f"Annual change in total biomass carbon stock (∆CB): {annual_change_in_carbon_stocks} tCO2e/yr")
+#     
+#     return result
+
+# biomass = {}
+# biomass["business_as_usual"] = calculate_all(scenario="business_as_usual")
+# biomass["intervention"] = calculate_all(scenario="intervention")
+# 
+# biomass_co2_result = {}
+# 
+# for inter_item, bau_item in zip(biomass["intervention"]["annual_change_in_carbon_stocks"], 
+#                                 biomass["business_as_usual"]["annual_change_in_carbon_stocks"]):
+#     if inter_item['aoi_id'] != bau_item['aoi_id']:
+#         raise ValueError(f"Mismatched aoi_ids: {inter_item['aoi_id']} and {bau_item['aoi_id']}")
+#     
+#     aoi_id = inter_item['aoi_id']
+#     difference = inter_item['annual_change'] - bau_item['annual_change']
+#     
+#     biomass_co2_result[aoi_id] = difference# inter_result = calculate_all(scenario="intervention")
+# 
+# print(biomass_co2_result)
+# 
+# biomass_co2_result_error_positive = 10  # this is a percentage
+# 
+# biomass_co2_sd = {}
+# 
+# for aoi_id, difference in biomass_co2_result.items():
+#     # Calculate SD for each aoi_id
+#     sd = (abs(difference) * biomass_co2_result_error_positive / 100) / 1.96
+#     biomass_co2_sd[aoi_id] = sd
+
+# #### edited code to fix issues
+# def calculate_all(scenario, log_level='info'):
+#     result = {}
+#     
+#     try:
+#         check_global_variables()
+#         
+#         average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario, log_level=log_level)
+#         result["average_agbd_tco2e"] = average_agbd_tco2e
+#         
+#         mean_annual_tot_c_stock_result = mean_annual_tot_c_stock(average_agbd_tco2e, scenario=scenario, log_level=log_level)
+#         result["mean_annual_tot_c_stock"] = mean_annual_tot_c_stock_result
+#         
+#         delta_CG = calculate_annual_co2_impact(scenario=scenario, years=20, average_agbd_tco2e=average_agbd_tco2e, log_level=log_level)
+#         result["delta_CG"] = delta_CG
+#         
+#         delta_co2_conversion = estimate_co2_conversion(scenario=scenario, log_level=log_level)
+#         result["delta_co2_conversion"] = delta_co2_conversion
+#         
+#         lwood_removals = calculate_lwood_removals(scenario=scenario, log_level=log_level)
+#         result["lwood_removals"] = lwood_removals
+#         
+#         lfuelwood = calculate_lfuelwood(scenario=scenario, log_level=log_level)
+#         result["lfuelwood"] = lfuelwood
+#         
+#         ldisturbance = calculate_ldisturbance(scenario=scenario, log_level=log_level)
+#         result["ldisturbance"] = ldisturbance
+#         
+#         delta_cl = calculate_delta_cl(lwood_removals, lfuelwood, ldisturbance, log_level=log_level)
+#         result["delta_cl"] = delta_cl
+#         
+#         annual_change_in_carbon_stocks = calculate_annual_change_in_carbon_stocks(delta_CG, delta_co2_conversion, delta_cl, log_level=log_level)
+#         result["annual_change_in_carbon_stocks"] = annual_change_in_carbon_stocks
+#         
+#     except Exception as e:
+#         print(f"Error in calculate_all for scenario {scenario}: {str(e)}")
+#         result["error"] = str(e)
+#     
+#     return result
+
+#### edited calculate_all function to fix issues
 def calculate_all(scenario, log_level='info'):
     result = {}
     
@@ -785,6 +900,20 @@ biomass = {
 biomass_co2_result = {}
 biomass_co2_sd = {}
 biomass_co2_result_error_positive = 10  # this is a percentage
+
+# for inter_item, bau_item in zip(biomass["intervention"]["annual_change_in_carbon_stocks"], 
+#                                 biomass["business_as_usual"]["annual_change_in_carbon_stocks"]):
+#     if inter_item['aoi_id'] != bau_item['aoi_id']:
+#         raise ValueError(f"Mismatched aoi_ids: {inter_item['aoi_id']} and {bau_item['aoi_id']}")
+#     
+#     aoi_id = inter_item['aoi_id']
+#     difference = inter_item['annual_change'] - bau_item['annual_change']
+#     
+#     biomass_co2_result[aoi_id] = difference
+#     biomass_co2_sd[aoi_id] = (abs(difference) * biomass_co2_result_error_positive / 100) / 1.96
+# 
+# print("Biomass CO2 Result:", biomass_co2_result)
+# print("Biomass CO2 Standard Deviation:", biomass_co2_sd)
 
 def get_annual_change(scenario_result):
     if 'annual_change_in_carbon_stocks' in scenario_result:
@@ -889,6 +1018,20 @@ def load_json_data(file_path):
 
 ## Step 10.2: Define function to organize results
 
+# def average_results_sims(input_dict):
+#     results_unc = {}
+#     for key, value in input_dict.items():
+#         if isinstance(value, list):
+#             if value:  # Check if the list is not empty
+#                 average = sum(value) / len(value)
+#                 results_unc[key] = average
+#             else:
+#                 results_unc[key] = 0  # or None, for empty lists
+#         else:
+#             results_unc[key] = value  # Keep non-list values as they are
+#     return results_unc
+
+#edited
 def sanitize_filename(filename: str) -> str:
     # Remove invalid characters
     sanitized = re.sub(r'[<>:"/\\|?*]', '', filename)
