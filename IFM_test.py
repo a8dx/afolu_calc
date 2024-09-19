@@ -8,7 +8,7 @@
 # Filename: IFM_final.py
 # Author: Barbara Bomfim
 # Date Started: 07/14/2024
-# Last Edited: 09/18/2024
+# Last Edited: 09/19/2024
 # Purpose: AFOLU GHG Calculations for Improved Forest Management Interventions (RIL and Extended Rotation)
 # **********************************************************************************************************/
 
@@ -288,7 +288,7 @@ def calculate_carbon_wood_products(scenario, log_level='info'):
         area = subregion["area"]
         
         C_timber = float(scenario_data.get("C_timber", 0))
-        r_w = float(scenario_data.get("r_w", 0))
+        r_w = float(scenario_data.get("r_w", 0)) # this is a standard, fixed value
         prop_ox = 0.25
         #prop_ox = float(scenario_data.get("prop_ox", 0))
         prop_ox_long = 0.947
@@ -547,6 +547,12 @@ for inter_item, bau_item in zip(intervention_changes, bau_changes):
 
 print("Biomass CO2 Result:", biomass_co2_result)
 print("Biomass CO2 Standard Deviation:", biomass_co2_sd)
+
+## To Mathematica Team: Check why output is like this:
+# print("Biomass CO2 Result:", biomass_co2_result)
+# Biomass CO2 Result: {'tropicalmoist_acrisols': -7030.206333333328, 'tropicalmoist_ferralsols': -7030.206333333328}
+# >>> print("Biomass CO2 Standard Deviation:", biomass_co2_sd)
+# Biomass CO2 Standard Deviation: {'tropicalmoist_acrisols': 358.6839965986392, 'tropicalmoist_ferralsols': 358.6839965986392}
 
 
 ####### EXTENDED ROTATION INTERVENTION ##########
