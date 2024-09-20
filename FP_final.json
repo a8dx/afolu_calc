@@ -45,6 +45,9 @@
         "forest_area": "1000",
         "fire_incidence_rate": "0.1",
         "illegal_logging_rate": "2",
+        "Iv": "2.0",
+        "BCEFi": "1.8",
+        "community_offtake": "20",
         "aoi_subregions": [
           {
             "aoi_id": "tropicalmoist_acrisols",
@@ -128,11 +131,14 @@
         "below_ground_biomass_to_above_ground_biomass_error_positive": "45",
         "fuel_biomass_mean": "20",
         "fuel_biomass_sd": "3",
-        "deforestation_rate_pre": "2",
+        "deforestation_rate_pre": "4",
         "deforestation_rate_post": "1",
         "forest_area": "1000",
         "fire_incidence_rate": "0.05",
         "illegal_logging_rate": "1",
+        "Iv": "2.0",
+        "BCEFi": "1.8",
+        "community_offtake": "0",
         "aoi_subregions": [
           {
             "aoi_id": "tropicalmoist_acrisols",
