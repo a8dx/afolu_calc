@@ -11,20 +11,20 @@
       {
         "land_use_type": "Grassland",
         "fire_used": "true",
-        "FI": "1",
-        "FI_error_negative": "0",
-        "FI_error_positive": "0",
+        "FI": "1", ### JS:Doesn't appear in py script
+        "FI_error_negative": "0",  ### JS:Doesn't appear in py script
+        "FI_error_positive": "0",  ### JS:Doesn't appear in py script
         "combustion_factor_mean": "0.34",
         "combustion_factor_sd": "0.16",
-        "bio_ef": "1580",
+        "bio_ef": "1580", ### JS:called burning_co2_ef_mean in enrichment object 
         "years": "20",
-        "area_converted_yr": "100",
-        "H": "0",
+        "area_converted_yr": "100", 
+        "H": "0",  ### JS:Doesn't appear in py script
         "BCEFr": "0.5",
-        "CF": "0.47",
-        "D": "0.5",
-        "Adisturbance": "10.0",
-        "Bw": "60",
+        "CF": "0.47", ### JS: this CF = 0.47 is a value that should be hard coded (carbon fraction of trees = 0.47)
+        "D": "0.5", ## JS: Doesn't appear in py script
+        "Adisturbance": "10.0",  ## JS: this is equivalent to the area of the sub_aoi
+        "Bw": "60",  ## JS: aboveground biomass of the area affected by the disturance = gedi_l4b_agb_mean_total_mg
         "fd": "0.3",
         "ratio_below_ground_biomass_to_above_ground_biomass": "0.20",
         "below_ground_biomass_to_above_ground_biomass_error_negative": "-45",
@@ -39,10 +39,10 @@
         "Iv": "2.0",
         "BCEFi": "1.8",
         "community_offtake": "20",
-        "LDF_factor_1": "-0.0039",
-        "LDF_factor_2": "1.7817",
-        "ElE_factor_1": "0.4924",
-        "ElE_factor_2": "0.0158",
+        "LDF_factor_1": "-0.0039", ## JS: LDF_factor_1 is hard coded as -0.0039 (Winrock FP method)
+        "LDF_factor_2": "1.7817", ## JS: LDF_factor_2 is hard coded as 1.7817 (Winrock FP method)
+        "ElE_factor_1": "0.4924", ## JS: ElE_factor_1 is hard coded as 0.4924 (Winrock FP method)
+        "ElE_factor_2": "0.0158", ## JS: ElE_factor_2 is hard coded as 0.0158 (Winrock FP method)
         "incidental_damage_fraction": "0.5",
         "aoi_subregions": [
           {
@@ -66,8 +66,8 @@
               "FMG":"1.14",
               "FMG_error_negative":"-8",
               "FMG_error_positive":"8",
-              "ef_ch4":"58",
-              "Nex":"0.47"
+              "ef_ch4":"58", ### JS:Doesn't appear in py script
+              "Nex":"0.47" ### JS:Doesn't appear in py script
           },
           {
             "aoi_id": "tropicalmoist_ferralsols",
