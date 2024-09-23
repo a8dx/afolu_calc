@@ -8,7 +8,7 @@
 # Filename: Forest_Protection_Deforestation_test.py
 # Author: Barbara Bomfim
 # Date Started: 07/11/2024
-# Last Edited: 09/20/2024
+# Last Edited: 09/22/2024
 # Purpose: AFOLU GHG Calculations for Forest Protection from Deforestation (FP) Interventions
 # **********************************************************************************************************/
 
@@ -16,14 +16,14 @@
 # Climate zone and soil type: These are contained in the geography_mask_area_info json
 #   file, which sources data_FP from Dynamic World land use data_FP,  data_FP layers
 #
-# User inputs: User inputs depend on sub-intervention category (planted or natural forest; 
-#  tillage; nutrient management; fire management). 
+# User inputs: User inputs depend on sub-intervention category: 
+#               protection_from_fire, 
+#               protection_from_deforestation,
+#               protection_from_illegal_logging. 
 #   - Initial:
 #           -land area: area under business-as-usual land use
 #           -forest_type_deforestation: forest type prior to deforestation
 #.          -forest_management_type: Natural, Plantation
-#           -tillage_type: Full Till, Reduced Till, No Till, Unknown
-#           -ag_inputs: Low, Medium, High without manure, High with manure, Unknown
 #           -fire_used: yes, no
 #.  -Baseline data:
 #           -deforested_land_area: area under business-as-usual land use (deforestation)
@@ -31,13 +31,10 @@
 #           -forest_type_deforestation: forest type prior to deforestation
 #.          -forest_management_type: Natural, Plantation
 #           -fire_used: yes, no
+#           -fire_frequency = 5 years, 10 years
+#           -Bw = average AGB of land areas affected by disturbance (t dm/ha) is the same as the AGB from the GEDI. 
+#           -fd = fraction of biomass lost in disturbance (dimensionless; default 0.34 for fire))
 #           -deforested_for_fuelwood: Percentage of harvested wood used for fuelwood
-#           -agroforestry_type: Alleycropping, Fallow, Hedgerow, Multistrata, Parkland, Shaded perennial, Silvoarable, Silvopasture
-#           -monoculture_type: Oilpalm, Rubber, Tea
-#           -settlement_type: Settlement, Urban green, Turfgrass, Cultivated soil
-#           -reservoir_type: Default, Oligotrophic, Mesotrophic, Eutrophic, Hypereutrophic
-#           -tillage_type: Full Till, Reduced Till, No Till, Unknown
-#           -ag_inputs: Low, Medium, High without manure, High with manure, Unknown
 #           -illegal_logging_rate: volume timber over bark extracted illegally each year (m3 ha-1 yr-1)
 #  -Intervention requires:
 #           -forest_area: forest area that is being protected
@@ -192,43 +189,38 @@ with open(file_path, 'r') as file:
 
 ### STEP 2: Calculate Mean annual Aboveground Carbon (AGC) stock in tCO2e/ha ####
 # here we obtain aboveground biomass and convert to aboveground carbon stock
-def mean_annual_agc_stock(scenario, log_level='info'): # edited this function
-    global data, polygon, average_abgd_dict ## edited this line
+def mean_annual_agc_stock(scenario, log_level='info'):
+    global data, average_agbd_dict
     
     scenario_data = data["scenarios"][scenario][0]
     
     average_agbd_value = average_agbd_dict.get('agbd_mean', 0)
-    area_converted = polygon.area().getInfo()/10000 # converting to hectares
-    area_converted_yr = area_converted # area_converted_yr is defined
     
-    CF = scenario_data.get("CF", 0) #dry matter to carbon conversion factor
+    CF = scenario_data.get("CF", 0)
     average_agbd_cstock = convert_to_c(average_agbd_value, CF)
     average_agbd_tco2e = convert_to_co2e(average_agbd_cstock)
     
-    if log_level == 'debug':
-        print(f"{area_converted} ha")
-        print(f"Average Aboveground Biomass Density: {average_agbd_value} Mg/ha")
-        print(f"Average Aboveground Carbon Stock: {average_agbd_tco2e} tCO2e/ha")
-    
     subregion_results = []
     for subregion in scenario_data["aoi_subregions"]:
-        subregion_area = subregion["area"]
-        subregion_fraction = subregion_area / area_converted_yr if area_converted_yr !=0 else 0 # edited this line
+        forest_area = subregion["area"]
         
-        subregion_agbd_tco2e = average_agbd_tco2e * subregion_fraction
+        subregion_agbd_tco2e = average_agbd_tco2e * forest_area
         
         subregion_results.append({
             "aoi_id": subregion["aoi_id"],
-            "area": subregion_area,
+            "area": forest_area,
             "carbon_stock": subregion_agbd_tco2e
         })
         
         if log_level == 'debug':
-            print(f"Subregion {subregion['aoi_id']}: {subregion_agbd_tco2e} tCO2e")
-            print(f"Mean annual AGC stock calculated for scenario: {scenario}")
-            print(f"Total area converted: {area_converted_yr} ha")
-            print(f"Average AGBD value: {average_agbd_value} Mg/ha")
-            print(f"Average AGBD CO2e: {average_agbd_tco2e} tCO2e/ha")
+            print(f"Subregion {subregion['aoi_id']}:")
+            print(f"  Forest Area: {forest_area:.2f} ha")
+            print(f"  Average AGBD: {average_agbd_value:.2f} Mg/ha")
+            print(f"  Carbon Fraction (CF): {CF:.2f}")
+            print(f"  Average AGBD Carbon Stock: {average_agbd_cstock:.2f} tC/ha")
+            print(f"  Average AGBD CO2e: {average_agbd_tco2e:.2f} tCO2e/ha")
+            print(f"  Subregion Carbon Stock: {subregion_agbd_tco2e:.2f} tCO2e")
+            print()
     
     return subregion_results
   
@@ -264,8 +256,9 @@ def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
     
     return total_results
 
-####STEP 4 #############
-### BASELINE: Annual Total Biomass CO2 calculations ###
+
+####STEP 4A - PROTECTION FROM DEFORESTATION SUB-INTERVENTION ########
+### BASELINE: Protection from Deforestation Annual Total Biomass CO2 calculations ###
 
 ## Equations:
 # historical_deforestation_rate = calculate_historical_deforestation_rate(deforestation_rate_pre, deforestation_rate_post)
@@ -273,8 +266,9 @@ def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
 # carbon_stock_loss = calculate_carbon_stock_loss(area_deforested_value, average_total_tco2e)
 # annual_baseline_biomass_co2_emissions = calculate_annual_baseline_emissions(historical_deforestation_rate, carbon_stock_loss)
 
-## Step 4.1: Define equation to calculate Historical Deforestation Rate 
+## Step 4A.1: Define equation to calculate Historical Deforestation Rate 
   # this will be provided from Global Forest Watch data
+  
 def calculate_historical_deforestation_rate(total_results, scenario, log_level='info'):
     global data
     
@@ -302,7 +296,7 @@ def calculate_historical_deforestation_rate(total_results, scenario, log_level='
     
     return total_results
   
-## Step 4.2: Define equation to calculate Baseline Yearly Deforested Area
+## Step 4A.2: Define equation to calculate Baseline Yearly Deforested Area
 def calculate_deforested_area_yeari(total_results, scenario, log_level='info'):
     global data
     
@@ -313,7 +307,7 @@ def calculate_deforested_area_yeari(total_results, scenario, log_level='info'):
     
     for subregion in aoi_subregions:
         aoi_id = subregion["aoi_id"]
-        forest_area_aoi = subregion["area"]
+        forest_area_aoi = subregion["area"] ## Anthony here check for forest_area (the area that is actually forest)
         historical_def_rate_aoi = subregion["hist_def_rate"]
     
     deforested_area_yeari = (historical_def_rate_aoi / 100) * forest_area_aoi
@@ -328,61 +322,8 @@ def calculate_deforested_area_yeari(total_results, scenario, log_level='info'):
     
     return total_results
   
-##Define equation to calculate Yearly Baseline Total Biomass Carbon Stock Loss
-# def calculate_carbon_stock_loss_yeari(total_results, scenario, log_level='info'):
-#     global data
-#     
-#     scenario_data = data["scenarios"][scenario][0]
-#     #ratio = scenario_data["ratio_below_ground_biomass_to_above_ground_biomass"]
-#     
-#     total_results = []
-#     
-#     for subregion in aoi_subregions:
-#         aoi_id = subregion["aoi_id"]
-#         deforested_area_yeari = subregion["deforested_area_year_i"]
-#         average_total_tco2e = subregion["total_carbon_stock"]
-#  
-#         carbon_stock_loss = deforested_area_yeari * average_total_tco2e
-#         
-#         total_results.append({
-#             "total_carbon_stock_loss": carbon_stock_loss
-#         })
-#         
-#         if log_level == 'debug':
-#             print(f"Subregion {total_results['aoi_id']}:")
-#             print(f"  Carbon Stock Loss year i: {carbon_stock_loss:.2f} tCO2/yr")
-#     
-#     return total_results
+#### Step 4A.3: Define equation to calculate Baseline Annual Total Biomass CO2 Emissions ##
 
-
-#### Step 4.3: Define equation to calculate Baseline Annual Total Biomass CO2 Emissions ##
-
-# def calculate_baseline_biomass_co2_emissions(total_results, scenario, log_level='info'):
-#     global data
-#     
-#     scenario_data = data["scenarios"][scenario][0]
-#     #ratio = scenario_data["ratio_below_ground_biomass_to_above_ground_biomass"]
-#     
-#     total_results = []
-#     
-#     for subregion in aoi_subregions:
-#         aoi_id = subregion["aoi_id"]
-#         historical_def_rate = subregion["hist_def_rate"]
-#         carbon_stock_loss_yeari = subregion["carbon_stock_loss"]
-#  
-#         annual_baseline_biomass_co2_emissions = historical_def_rate * carbon_stock_loss_yeari
-#         
-#         total_results.append({
-#             "annual_baseline_biomass_co2": annual_baseline_biomass_co2_emissions
-#         })
-#         
-#         if log_level == 'debug':
-#             print(f"Subregion {total_results['aoi_id']}:")
-#             print(f"  Annual Baseline Emissions year i: {annual_baseline_biomass_co2_emissions:.2f} tCO2/yr")
-#     
-#     return total_results
-
-#edited code
 def load_json_data(json_file_path):
     with open(json_file_path, 'r') as file:
         return json.load(file)
@@ -398,14 +339,14 @@ def calculate_deforested_area_yeari(forest_area, hist_def_rate):
 def calculate_carbon_stock_loss_yeari(deforested_area, average_total_tco2e):
     return deforested_area * average_total_tco2e
 
-def calculate_baseline_biomass_co2_emissions(json_file_path, scenario, log_level='info'):
+def calculate_baseline_AD_biomass_co2_emissions(json_file_path, scenario, log_level='info'):
     data = load_json_data(json_file_path)
     scenario_data = data["scenarios"][scenario][0]
     
     years = int(scenario_data.get('years', 20))
     if years != 20:
         print(f"Warning: 'years' in the JSON file is set to {years}. Using 20 years for calculations.")
-    years = 20  # Ensure we use 20 years for the calculation
+    years = 20
     
     aoi_subregions = scenario_data.get("aoi_subregions", [])
     
@@ -415,7 +356,7 @@ def calculate_baseline_biomass_co2_emissions(json_file_path, scenario, log_level
     
     for subregion in aoi_subregions:
         aoi_id = subregion["aoi_id"]
-        forest_area = float(subregion["area"])
+        forest_area = float(subregion["forest_area"]) ### Anthony to check here if forest_area is correct in json and we have a way to get this value
         average_total_tco2e = float(subregion.get("total_carbon_stock", 0))
         
         subregion_results = {
@@ -458,46 +399,248 @@ def calculate_baseline_biomass_co2_emissions(json_file_path, scenario, log_level
     
     return total_results
 
-# Testing
-json_file_path = 'FP_final.json'
-scenario = 'business_as_usual'  # or 'intervention'
+#### STEP 4B - Baseline Fire subintervention ############
+# if the user selects that intervention_sub_category then the equation for the 
+#Baseline fire frequency can be accounted for in the deltaCL in the Baseline, and then that term is 
+#not included in the Intervention scenario, assuming there are no more fire disturbances due to the protection.
 
-results = calculate_baseline_biomass_co2_emissions(json_file_path, scenario, log_level='debug')
-
-if results:
-    print("\nBaseline Biomass CO2 Emissions Results:")
-    for subregion in results:
-        print(f"AOI: {subregion['aoi_id']}")
-        print(f"Historical Deforestation Rate: {subregion['hist_def_rate']:.2f}%/yr")
-        print(f"  Total Deforested Area over 20 years: {subregion['total_deforested_area']:.2f} ha")
-        print(f"  Total Baseline Biomass CO2 Emissions over 20 years: {subregion['total_emissions']:.2f} tCO2")
+### Step 4B.1: Define equation to calculate fire disturabance impact using total_carbon_stock obtained in Step 3
+def calculate_ldisturbance(total_results, scenario, log_level='info'):
+    global data
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    results = []
+    total_ldisturbance = 0
+    total_area = 0
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
         
-        if subregion['annual_emissions']:
-            print("  Annual Emissions:")
-            for year_data in subregion['annual_emissions']:
-                print(f"    Year {year_data['year']}: {year_data['baseline_biomass_co2_emissions']:.2f} tCO2")
-        else:
-            print("  No annual emissions data available.")
-else:
-    print("Failed to calculate Baseline Biomass CO2 Emissions.")
+    for subregion in total_results:
+        total_carbon_stock = subregion["total_carbon_stock"]
+        
+        Adisturbance = scenario_data.get("Adisturbance") # area affected by the disturbance
+        #Bw = scenario_data.get("Bw") # aboveground biomass of the area affected by the disturance
+        #ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
+        fd = scenario_data.get("fd") # fraction of the biomass affected by the disturbance. using 0.5 for fire in baseline
+        
+        if None in [Adisturbance, Bw, ratio, fd]:
+            if log_level == 'debug':
+                print(f"Missing data for calculating Ldisturbance in subregion {aoi_id}. Please check your data.")
+            continue
+        
+        ldisturbance = Adisturbance * total_carbon_stock * fd
+        
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "ldisturbance": ldisturbance
+        })
+        
+        total_ldisturbance += ldisturbance
+        total_area += area
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Annual biomass carbon losses due to disturbances: {ldisturbance:.2f} tCO2e/yr")
+            print(f"  Area: {area:.2f} ha")
+    
+    average_ldisturbance = total_ldisturbance / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nTotal annual biomass carbon losses due to disturbances across all subregions: {total_ldisturbance:.2f} tCO2e/yr")
+        print(f"Average annual biomass carbon losses due to disturbances per hectare: {average_ldisturbance:.2f} tCO2e/ha/yr")
+    
+    return results
 
-# Print raw results for debugging
-print("\nRaw Results:")
-import pprint
-pprint.pprint(results)
+###### Step 4B.2: Define function to multiply baseline fire frequency by ldisturbance
+def calculate_fire_co2_emissions(scenario, log_level='info'):
+    """
+    Calculate fire CO2 emissions based on ldisturbance and fire frequency for each subregion.
+    Parameters:
+    scenario (str): Scenario in question
+    
+    Returns:
+    list: Fire CO2 emissions (tCO2e/yr) for each subregion.
+    """
+    global data
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    # Get fire frequency from scenario data
+    fire_frequency = float(scenario_data.get("fire_frequency", 0))  # e.g., 0.2 for every 5 years
+    
+    # Calculate ldisturbance using the existing function
+    ldisturbance_results = calculate_ldisturbance(scenario, log_level)
+    
+    results = []
+    total_fire_co2_emissions = 0
+    total_area = 0
+    
+    for ldisturbance_result in ldisturbance_results:
+        aoi_id = ldisturbance_result["aoi_id"]
+        area = ldisturbance_result["area"]
+        ldisturbance = ldisturbance_result["ldisturbance"]
+        
+        # Calculate fire CO2 emissions
+        fire_co2_emissions = ldisturbance * fire_frequency
+        
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "fire_co2_emissions": fire_co2_emissions
+        })
+        
+        total_fire_co2_emissions += fire_co2_emissions
+        total_area += area
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Fire CO2 Emissions: {fire_co2_emissions:.2f} tCO2e/yr")
+            print(f"  Area: {area:.2f} ha")
+    
+    average_fire_co2_emissions = total_fire_co2_emissions / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nFire Frequency: {fire_frequency:.4f} (every {1/fire_frequency:.1f} years)")
+        print(f"Total Fire CO2 Emissions across all subregions: {total_fire_co2_emissions:.2f} tCO2e/yr")
+        print(f"Average Fire CO2 Emissions per hectare: {average_fire_co2_emissions:.2f} tCO2e/ha/yr")
+    
+    return results
+
+#### STEP 4C - Baseline Fire subintervention ############
+
+## same as equations in Step 5C.1, Step 5C.2 and Step 5C.3 below
 
 
+#### STEP 5: Define function to estimate average annual biomass growth in Baseline Scenario
+def calculate_average_annual_biomass_growth(scenario, log_level='info'):
+    """
+    Calculate average annual biomass growth (Gtotal) for each subregion.
+    Parameters:
+    scenario (str): Scenario in question
+    
+    Returns:
+    list: Average annual biomass growth (tonnes d.m. ha-1 yr-1) for each subregion.
+    """
+    global data
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    total_results = []
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = float(subregion["area"])
+        
+        # Retrieve parameters from scenario data
+        R = float(scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass", 0))
+        Iv = float(scenario_data.get("Iv", 0))
+        BCEFi = float(scenario_data.get("BCEFi", 0))
+        
+        # Calculate Gtotal
+        Gtotal = Iv * BCEFi * (1 + R)
+        
+        subregion_result = {
+            "aoi_id": aoi_id,
+            "area": area,
+            "Gtotal": Gtotal
+        }
+        
+        total_results.append(subregion_result)
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Area: {area:.2f} ha")
+            print(f"  R: {R:.4f}")
+            print(f"  Iv: {Iv:.4f} m3 ha-1 yr-1")
+            print(f"  BCEFi: {BCEFi:.4f}")
+            print(f"  Gtotal: {Gtotal:.4f} tonnes d.m. ha-1 yr-1")
+    
+    if log_level == 'debug':
+        total_area = sum(result['area'] for result in total_results)
+        total_Gtotal = sum(result['area'] * result['Gtotal'] for result in total_results)
+        average_Gtotal = total_Gtotal / total_area if total_area > 0 else 0
+        print(f"\nTotal area across all subregions: {total_area:.2f} ha")
+        print(f"Average Gtotal across all subregions: {average_Gtotal:.4f} tonnes d.m. ha-1 yr-1")
+    
+    return total_results
 
 
-####### Intervention Calculations: Avoided Deforestation Total Biomass CO2 Calculations #######
+#### STEP 5.1: Define function to estimate annual increase in biomass carbon stock in Baseline Scenario
+def calculate_delta_cg(scenario, log_level='info'):
+    """
+    Calculate the annual increase in biomass carbon stocks (ΔCG) for each subregion.
+    Parameters:
+    scenario (str): Scenario in question
+    
+    Returns:
+    list: Annual increase in biomass carbon stocks (tC/yr) for each subregion.
+    """
+    global data
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    
+    # Get the carbon fraction of dry matter from scenario data
+    CF = float(scenario_data.get("CF", 0))
+    
+    # Calculate Gtotal using the existing function
+    gtotal_results = calculate_average_annual_biomass_growth(scenario, log_level)
+    
+    results = []
+    total_delta_cg = 0
+    total_area = 0
+    
+    for gtotal_result in gtotal_results:
+        aoi_id = gtotal_result["aoi_id"]
+        A = gtotal_result["area"]  # Area in hectares
+        Gtotal = gtotal_result["Gtotal"]
+        
+        # Calculate ΔCG
+        delta_cg = A * Gtotal * CF
+        
+        results.append({
+            "aoi_id": aoi_id,
+            "area": A,
+            "delta_cg": delta_cg
+        })
+        
+        total_delta_cg += delta_cg
+        total_area += A
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Area (A): {A:.2f} ha")
+            print(f"  Gtotal: {Gtotal:.4f} tonnes d.m. ha-1 yr-1")
+            print(f"  Carbon Fraction (CF): {CF:.4f}")
+            print(f"  Annual Increase in Biomass Carbon Stocks (ΔCG): {delta_cg:.2f} tC/yr")
+    
+    average_delta_cg = total_delta_cg / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nTotal area across all subregions: {total_area:.2f} ha")
+        print(f"Total Annual Increase in Biomass Carbon Stocks: {total_delta_cg:.2f} tC/yr")
+        print(f"Average Annual Increase in Biomass Carbon Stocks per hectare: {average_delta_cg:.4f} tC/ha/yr")
+    
+    return results
 
-### Step 5: Define equations needed to calculate Avoided Deforestation Emissions from Trees:
-## Step 5.1: Equation to calculate Actual deforested area and Forest area end of year n
+
+############### Sub-intervention Calculations ###############
+## 5A Protection from Deforestation
+## 5B Protection from Fire
+## 5C Protection from Illegal Logging
+
+#### STEP 5A: Avoided Deforestation Total Biomass CO2 Calculations #######
+
+###Define equations needed to calculate Avoided Deforestation Emissions from Trees:
+
+## Step 5A.1: Equation to calculate Actual deforested area and Forest area end of year n
 def calculate_actual_area_deforested_year_n(total_results, scenario, log_level='info'):
     global data
     
     scenario_data = data["scenarios"][scenario][0]
-    forest_area = scenario_data["forest_area"]
+    forest_area = scenario_data["forest_area"] ### Anthony to check here if forest_area is correct in json and we have a way to get this value
     deforestation_post = scenario_data["deforestation_rate_post"]
     
     total_results = []
@@ -520,7 +663,7 @@ def calculate_actual_area_deforested_year_n(total_results, scenario, log_level='
 
     return total_results
 
-## Step 5.2: Calculate area of avoided deforestation in year n
+### Step 5A.2: Calculate area of avoided deforestation in year n
 def calculate_area_avoided_deforestation_year_n(total_results, scenario, log_level='info'):
     global data
     
@@ -544,11 +687,11 @@ def calculate_area_avoided_deforestation_year_n(total_results, scenario, log_lev
         
     if log_level == 'debug':
     print(f"Subregion {total_results['aoi_id']}:")
-    print(f"forest_area_end_of_year: {forest_area_end_of_year:.2f} ha/yrr")
+    print(f"forest_area_end_of_year: {forest_area_end_of_year:.2f} ha/yr")
     
     return total_results
 
-## Step 5.3: Calculate Avoided Deforestation Emissions from Trees
+### Step 5A.3: Calculate Avoided Deforestation Emissions from Trees
 def calculate_avoided_emissions_trees_each_year(total_results, scenario, log_level='info'):
     global data
     
@@ -580,16 +723,18 @@ def calculate_avoided_emissions_trees_each_year(total_results, scenario, log_lev
      
         return total_results
 
-### Step 6: Calculate Expected Carbon Stock changes due to Avoided Deforestation
-
-##Step 6.1: Define function to estimate average annual biomass growth
-def load_json_data(json_file_path):
-    with open(json_file_path, 'r') as file:
-        return json.load(file)
-
-def calculate_average_annual_biomass_growth(json_file_path, scenario, log_level='info'):
-    data = load_json_data(json_file_path)
-    scenario_data = data["scenarios"][scenario][0]
+###Step 5A.4: Define function to estimate average annual biomass growth due to Avoided Deforestation
+def calculate_average_annual_biomass_growth(scenario, log_level='info'):
+    """
+    Calculate average annual biomass growth (Gtotal) for each subregion.
+    Parameters:
+    scenario (str): Scenario in question
+    
+    Returns:
+    list: Average annual biomass growth (tonnes d.m. ha-1 yr-1) for each subregion.
+    """
+    global data
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
     aoi_subregions = scenario_data.get("aoi_subregions", [])
     
     total_results = []
@@ -598,10 +743,10 @@ def calculate_average_annual_biomass_growth(json_file_path, scenario, log_level=
         aoi_id = subregion["aoi_id"]
         area = float(subregion["area"])
         
-        # Retrieve parameters from JSON data
-        R = float(scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass", 0))   # Root-to-shoot ratio
-        Iv = float(scenario_data.get("Iv", 0))  # Average net annual increment (added to json file)
-        BCEFi = float(scenario_data.get("BCEFi", 0))  # Biomass conversion and expansion factor (added to the json file)
+        # Retrieve parameters from scenario data
+        R = float(scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass", 0))
+        Iv = float(scenario_data.get("Iv", 0))
+        BCEFi = float(scenario_data.get("BCEFi", 0))
         
         # Calculate Gtotal
         Gtotal = Iv * BCEFi * (1 + R)
@@ -609,243 +754,94 @@ def calculate_average_annual_biomass_growth(json_file_path, scenario, log_level=
         subregion_result = {
             "aoi_id": aoi_id,
             "area": area,
-            "Gtotal": Gtotal,
-            "parameters": {
-                "R": R,
-                "Iv": Iv,
-                "BCEFi": BCEFi
-            }
+            "Gtotal": Gtotal
         }
         
         total_results.append(subregion_result)
         
         if log_level == 'debug':
-            print(f"Subregion: {aoi_id}")
+            print(f"Subregion {aoi_id}:")
             print(f"  Area: {area:.2f} ha")
             print(f"  R: {R:.4f}")
             print(f"  Iv: {Iv:.4f} m3 ha-1 yr-1")
             print(f"  BCEFi: {BCEFi:.4f}")
             print(f"  Gtotal: {Gtotal:.4f} tonnes d.m. ha-1 yr-1")
-            print()
+    
+    if log_level == 'debug':
+        total_area = sum(result['area'] for result in total_results)
+        total_Gtotal = sum(result['area'] * result['Gtotal'] for result in total_results)
+        average_Gtotal = total_Gtotal / total_area if total_area > 0 else 0
+        print(f"\nTotal area across all subregions: {total_area:.2f} ha")
+        print(f"Average Gtotal across all subregions: {average_Gtotal:.4f} tonnes d.m. ha-1 yr-1")
     
     return total_results
 
-# Example usage
-json_file_path = 'FP_final.json'
-scenario = 'business_as_usual'  # or 'intervention'
 
-results = calculate_average_annual_biomass_growth(json_file_path, scenario, log_level='debug')
-
-if results:
-    print("\nAverage Annual Biomass Growth Results:")
-    for subregion in results:
-        print(f"AOI: {subregion['aoi_id']}")
-        print(f"  Area: {subregion['area']:.2f} ha")
-        print(f"  Average Annual Biomass Growth (Gtotal): {subregion['Gtotal']:.4f} tonnes d.m. ha-1 yr-1")
-        print("  Parameters used:")
-        for param, value in subregion['parameters'].items():
-            print(f"    {param}: {value:.4f}")
-        print()
-else:
-    print("Failed to calculate Average Annual Biomass Growth.")
-
-# Print raw results for debugging
-print("\nRaw Results:")
-import pprint
-pprint.pprint(results)
-
-
-##Step 6.2: Define function to estimate annual increase in biomass carbon stock due to biomass growth
-def calculate_annual_biomass_carbon_stock_increase(json_file_path, scenario, log_level='info'):
-    data = load_json_data(json_file_path)
-    scenario_data = data["scenarios"][scenario][0]
-    aoi_subregions = scenario_data.get("aoi_subregions", [])
+###Step 5A.5: Define function to estimate annual increase in biomass carbon stock due to Avoided Deforestation
+def calculate_delta_cg(scenario, log_level='info'):
+    """
+    Calculate the annual increase in biomass carbon stocks (ΔCG) for each subregion.
+    Parameters:
+    scenario (str): Scenario in question
     
-    total_results = []
+    Returns:
+    list: Annual increase in biomass carbon stocks (tC/yr) for each subregion.
+    """
+    global data
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
     
-    for subregion in aoi_subregions:
-        aoi_id = subregion["aoi_id"]
-        A = float(subregion["area"])  # Area in hectares
-        CF = float(scenario_data.get("CF", 0))  # Carbon fraction of dry matter
-        
-        # Calculate Gtotal using the previous function
-        Gtotal = calculate_average_annual_biomass_growth(scenario_data, subregion)
+    # Get the carbon fraction of dry matter from scenario data
+    CF = float(scenario_data.get("CF", 0))
+    
+    # Calculate Gtotal using the existing function
+    gtotal_results = calculate_average_annual_biomass_growth(scenario, log_level)
+    
+    results = []
+    total_delta_cg = 0
+    total_area = 0
+    
+    for gtotal_result in gtotal_results:
+        aoi_id = gtotal_result["aoi_id"]
+        A = gtotal_result["area"]  # Area in hectares
+        Gtotal = gtotal_result["Gtotal"]
         
         # Calculate ΔCG
-        delta_CG = A * Gtotal * CF
+        delta_cg = A * Gtotal * CF
         
-        subregion_result = {
+        results.append({
             "aoi_id": aoi_id,
             "area": A,
-            "Gtotal": Gtotal,
-            "CF": CF,
-            "delta_CG": delta_CG
-        }
+            "delta_cg": delta_cg
+        })
         
-        total_results.append(subregion_result)
+        total_delta_cg += delta_cg
+        total_area += A
         
         if log_level == 'debug':
-            print(f"Subregion: {aoi_id}")
+            print(f"Subregion {aoi_id}:")
             print(f"  Area (A): {A:.2f} ha")
-            print(f"  Average Annual Biomass Growth (Gtotal): {Gtotal:.4f} tonnes d.m. ha-1 yr-1")
-            print(f"  Carbon Fraction (CF): {CF:.4f} tonne C (tonne d.m.)-1")
-            print(f"  Annual Increase in Biomass Carbon Stocks (ΔCG): {delta_CG:.4f} tC/yr")
-            print()
+            print(f"  Gtotal: {Gtotal:.4f} tonnes d.m. ha-1 yr-1")
+            print(f"  Carbon Fraction (CF): {CF:.4f}")
+            print(f"  Annual Increase in Biomass Carbon Stocks (ΔCG): {delta_cg:.2f} tC/yr")
     
-    return total_results
-
-# testing
-json_file_path = 'FP_final.json'
-scenario = 'business_as_usual'  # or 'intervention'
-
-results = calculate_annual_biomass_carbon_stock_increase(json_file_path, scenario, log_level='debug')
-
-if results:
-    print("\nAnnual Increase in Biomass Carbon Stocks Results:")
-    total_delta_CG = 0
-    for subregion in results:
-        print(f"AOI: {subregion['aoi_id']}")
-        print(f"  Area: {subregion['area']:.2f} ha")
-        print(f"  Average Annual Biomass Growth (Gtotal): {subregion['Gtotal']:.4f} tonnes d.m. ha-1 yr-1")
-        print(f"  Carbon Fraction (CF): {subregion['CF']:.4f} tonne C (tonne d.m.)-1")
-        print(f"  Annual Increase in Biomass Carbon Stocks (ΔCG): {subregion['delta_CG']:.4f} tC/yr")
-        print()
-        total_delta_CG += subregion['delta_CG']
+    average_delta_cg = total_delta_cg / total_area if total_area > 0 else 0
     
-    print(f"Total Annual Increase in Biomass Carbon Stocks: {total_delta_CG:.4f} tC/yr")
-else:
-    print("Failed to calculate Annual Increase in Biomass Carbon Stocks.")
+    if log_level == 'debug':
+        print(f"\nTotal area across all subregions: {total_area:.2f} ha")
+        print(f"Total Annual Increase in Biomass Carbon Stocks: {total_delta_cg:.2f} tC/yr")
+        print(f"Average Annual Increase in Biomass Carbon Stocks per hectare: {average_delta_cg:.4f} tC/ha/yr")
+    
+    return results
 
-# Print raw results for debugging
-print("\nRaw Results:")
-import pprint
-pprint.pprint(results)
-
-#### Step 6.3:Calculate Annual Decrease in Biomass Stock ####
+#### STEP 5B: Avoided Fire Total Biomass CO2 Calculations #######
 
 ## Estimate ∆CL using Equation 2.11: ∆CL = Lwood−removals + Lfuelwood + Ldisturbance
-# Lwood-removals = annual carbon loss due to wood removals, tonnes C yr-1 (Equation 2.12) 
-# Lfuelwood = annual biomass carbon loss due to fuelwood removals, tC/yr (Equation 2.13)
+# NOT NEEDED AS SCENARRIOS ARE DEFORESTATION, ILLEGAL LOGGING OR FIRE Lwood-removals = annual carbon loss due to wood removals, tonnes C yr-1 (Equation 2.12) 
+# NOT NEEDED AS SCENARRIOS ARE DEFORESTATION, ILLEGAL LOGGING OR FIRE Lfuelwood = annual biomass carbon loss due to fuelwood removals, tC/yr (Equation 2.13)
 # Ldisturbance = annual biomass carbon losses due to disturbances, tonnes C yr-1 (See Equation 2.14)
 
-## Step 6.3.1: Define Lwood-removals equation
-def calculate_lwood_removals(scenario, log_level='debug'):
-    """
-    Calculate Lwood-removals using the provided equation for each subregion.
-    Parameters:
-    scenario (str): Scenario in question
-    Returns:
-    list: Annual carbon loss due to wood removals in tCO2e/yr for each subregion.
-    """
-    global data
-    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
-    aoi_subregions = scenario_data.get("aoi_subregions", [])
-    
-    results = []
-    total_lwood_removals = 0
-    total_area = 0
-    
-    for subregion in aoi_subregions:
-        aoi_id = subregion["aoi_id"]
-        area = subregion["area"]
-        
-        H = scenario_data.get("H")
-        BCEFr = scenario_data.get("BCEFr") # biomass conversion and expansion factors applicable to wood removals; transforms
-                                            # merchantable biomass to total biomass (including bark)
-        ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
-        CF = scenario_data.get("CF")
-
-        print(H, BCEFr, ratio, CF)
-        
-        if None in [H, BCEFr, ratio, CF]:
-            if log_level == 'debug':
-                print(f"Missing data for subregion {aoi_id} in scenario {scenario}. Please check your data.")
-            continue
-        
-        lwood_removals = H * BCEFr * (1 + ratio) * CF * (44 / 12) * (area / scenario_data.get("area_converted_yr", 1))
-        
-        results.append({
-            "aoi_id": aoi_id,
-            "area": area,
-            "lwood_removals": lwood_removals
-        })
-        
-        total_lwood_removals += lwood_removals
-        total_area += area
-        
-        if log_level == 'debug':
-            print(f"Subregion {aoi_id}:")
-            print(f"  Annual carbon loss due to wood removals: {lwood_removals:.2f} tCO2e/yr")
-            print(f"  Area: {area:.2f} ha")
-    
-    average_lwood_removals = total_lwood_removals / total_area if total_area > 0 else 0
-    
-    if log_level == 'debug':
-        print(f"\nTotal annual carbon loss due to wood removals across all subregions: {total_lwood_removals:.2f} tCO2e/yr")
-        print(f"Average annual carbon loss due to wood removals per hectare: {average_lwood_removals:.2f} tCO2e/ha/yr")
-    
-    return results
-
-## Step 6.3.2:Define Lfuelwood equation
-def calculate_lfuelwood(scenario, log_level='info'):
-    """
-    Calculate Lfuelwood using the provided equation for each subregion.
-    Parameters:
-    scenario (str): Scenario in question
-    Returns:
-    list: Annual biomass carbon loss due to fuelwood removals in tCO2e/yr for each subregion.
-    """
-    global data
-    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
-    aoi_subregions = scenario_data.get("aoi_subregions", [])
-    
-    results = []
-    total_lfuelwood = 0
-    total_area = 0
-    
-    for subregion in aoi_subregions:
-        aoi_id = subregion["aoi_id"]
-        area = subregion["area"]
-        
-        FGtrees = scenario_data.get("FGtrees")
-        FGpart = scenario_data.get("FGpart")
-        BCEFr = scenario_data.get("BCEFr")
-        ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
-        D = scenario_data.get("D")
-        CF = scenario_data.get("CF")
-        
-        if None in [FGtrees, FGpart, BCEFr, ratio, D, CF]:
-            if log_level == 'debug':
-                print(f"Missing data for calculating Lfuelwood in subregion {aoi_id}. Please check your data for scenario {scenario}.")
-            continue
-        
-        lfuelwood = ((FGtrees * BCEFr * (1 + ratio)) + FGpart * D) * CF * (44 / 12) * (area / scenario_data.get("area_converted_yr", 1))
-        
-        results.append({
-            "aoi_id": aoi_id,
-            "area": area,
-            "lfuelwood": lfuelwood
-        })
-        
-        total_lfuelwood += lfuelwood
-        total_area += area
-        
-        if log_level == 'debug':
-            print(f"Subregion {aoi_id}:")
-            print(f"  Annual biomass carbon loss due to fuelwood removals: {lfuelwood:.2f} tCO2e/yr")
-            print(f"  Area: {area:.2f} ha")
-    
-    average_lfuelwood = total_lfuelwood / total_area if total_area > 0 else 0
-    
-    if log_level == 'debug':
-        print(f"\nTotal annual biomass carbon loss due to fuelwood removals across all subregions: {total_lfuelwood:.2f} tCO2e/yr")
-        print(f"Average annual biomass carbon loss due to fuelwood removals per hectare: {average_lfuelwood:.2f} tCO2e/ha/yr")
-    
-    return results
-
-## Step 6.3.3: Estimate Annual Decrease in Biomass Carbon Stock
-#Define Ldisturbance equation
-def calculate_ldisturbance(scenario, log_level='info'):
+## Step 5B.1: Define equation to calculate fire disturabance impact using total_carbon_stock obtained in Step 3
+def calculate_ldisturbance(total_results, scenario, log_level='info'):
     global data
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
     aoi_subregions = scenario_data.get("aoi_subregions", [])
@@ -858,17 +854,20 @@ def calculate_ldisturbance(scenario, log_level='info'):
         aoi_id = subregion["aoi_id"]
         area = subregion["area"]
         
-        Adisturbance = scenario_data.get("Adisturbance")
-        Bw = scenario_data.get("Bw")
-        ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
-        fd = scenario_data.get("fd")
+    for subregion in total_results:
+        total_carbon_stock = subregion["total_carbon_stock"]
+        
+        Adisturbance = scenario_data.get("Adisturbance") # area affected by the disturbance
+        #Bw = scenario_data.get("Bw") # aboveground biomass of the area affected by the disturance
+        #ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
+        fd = scenario_data.get("fd") # fraction of the biomass affected by the disturbance. using 0.5 for fire in baseline
         
         if None in [Adisturbance, Bw, ratio, fd]:
             if log_level == 'debug':
                 print(f"Missing data for calculating Ldisturbance in subregion {aoi_id}. Please check your data.")
             continue
         
-        ldisturbance = Adisturbance * Bw * (1 + ratio) * fd * (44 / 12) * (area / scenario_data.get("area_converted_yr", 1))
+        ldisturbance = Adisturbance * total_carbon_stock * fd
         
         results.append({
             "aoi_id": aoi_id,
@@ -892,80 +891,27 @@ def calculate_ldisturbance(scenario, log_level='info'):
     
     return results
 
-## Step 6.3.4:Define ∆CL equation (∆CL = Lwood −removals + Lfuelwood + Ldisturbance)
-def calculate_delta_cl(lwood_removals_results, lfuelwood_results, ldisturbance_results, log_level='info'):
+### Step 5B.2: Estimate avoided biomass burning emissions from avoided fire
+def calculate_avoided_biomass_burning_emissions(scenario, log_level='info'):
     """
-    Calculate the change in biomass stock (∆CL) for each subregion.
+    Calculate avoided biomass burning emissions for each subregion.
     Parameters:
-    lwood_removals_results (list): List of dictionaries containing Lwood-removals results for each subregion.
-    lfuelwood_results (list): List of dictionaries containing Lfuelwood results for each subregion.
-    ldisturbance_results (list): List of dictionaries containing Ldisturbance results for each subregion.
-    log_level (str): Logging level. Set to 'debug' for detailed output.
-    Returns:
-    list: Change in biomass stock (∆CL) in tCO2e/yr for each subregion.
-    """
-    results = []
-    total_delta_cl = 0
-    total_area = 0
-
-
-    print("<<<<<>>>>", lwood_removals_results, lfuelwood_results, ldisturbance_results)
-
-    # Ensure all input lists have the same length
-    if not (len(lwood_removals_results) == len(lfuelwood_results) == len(ldisturbance_results)):
-        if log_level == 'debug':
-            print("Error: Input lists have different lengths. Please ensure all subregions are represented in each input.")
-        return None
-
-    for lwood, lfuel, ldist in zip(lwood_removals_results, lfuelwood_results, ldisturbance_results):
-        # Ensure we're dealing with the same subregion in all inputs
-        if not (lwood['aoi_id'] == lfuel['aoi_id'] == ldist['aoi_id']):
-            if log_level == 'debug':
-                print(f"Error: Mismatched subregion IDs: {lwood['aoi_id']}, {lfuel['aoi_id']}, {ldist['aoi_id']}")
-            continue
-
-        aoi_id = lwood['aoi_id']
-        area = lwood['area']  # Assuming area is the same in all inputs
-
-        # Calculate ∆CL for the subregion
-        delta_cl = lwood['lwood_removals'] + lfuel['lfuelwood'] + ldist['ldisturbance']
-
-        results.append({
-            "aoi_id": aoi_id,
-            "area": area,
-            "delta_cl": delta_cl
-        })
-
-        total_delta_cl += delta_cl
-        total_area += area
-
-        if log_level == 'debug':
-            print(f"Subregion {aoi_id}:")
-            print(f"  Change in biomass stock (∆CL): {delta_cl:.2f} tCO2e/yr")
-            print(f"  Area: {area:.2f} ha")
-
-    average_delta_cl = total_delta_cl / total_area if total_area > 0 else 0
-
-    if log_level == 'debug':
-        print(f"\nTotal change in biomass stock (∆CL) across all subregions: {total_delta_cl:.2f} tCO2e/yr")
-        print(f"Average change in biomass stock (∆CL) per hectare: {average_delta_cl:.2f} tCO2e/ha/yr")
-
-    print("RESSSSS", results) # note to edit this line or comment it
-
-    return results  
-
-### Step 6.4: Estimate avoided biomass burning emissions from avoided fire
-def calculate_avoided_biomass_burning_emissions(json_file_path, scenario, log_level='info'):
-    data = load_json_data(json_file_path)
-    scenario_data = data["scenarios"][scenario][0]
-    aoi_subregions = scenario_data.get("aoi_subregions", [])
-    Cf = 0.34  # Combustion factor, Value obtained from winrock AFOLU tool
-    bio_ef = float(scenario_data.get("bio_ef", 0)) #from json file, (1580 g CO2 per kg of dry matter burnt)
+    scenario (str): Scenario in question
     
-    # Retrieve fire incidence rate from JSON
+    Returns:
+    list: Avoided biomass burning emissions (tCO2/yr) for each subregion.
+    """
+    global data
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    Comb_fac = 0.34  # Combustion factor, Value obtained from winrock AFOLU tool, from IPCC (2006)
+    bio_ef = float(scenario_data.get("bio_ef", 0))  # Fire emissions factor
     fire_incidence_rate = float(scenario_data.get("fire_incidence_rate", 0))
     
     total_results = []
+    total_avoided_emissions = 0
+    total_area = 0
     
     for subregion in aoi_subregions:
         aoi_id = subregion["aoi_id"]
@@ -975,70 +921,97 @@ def calculate_avoided_biomass_burning_emissions(json_file_path, scenario, log_le
         # Calculate avoided biomass burning emissions
         avoided_emissions = (
             forest_area * 
-            (fire_incidence_rate * tree_carbon_stock * (1/0.47) * Cf * bio_ef) * 
+            (fire_incidence_rate * tree_carbon_stock * (1/0.47) * Comb_fac * bio_ef) * 
             1e-3  # Convert to tCO2/yr
         )
         
+        total_results.append({
+            "aoi_id": aoi_id,
+            "area": forest_area,
+            "avoided_biomass_burning_emissions": avoided_emissions
+        })
+        
+        total_avoided_emissions += avoided_emissions
+        total_area += forest_area
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Forest Area: {forest_area:.2f} ha")
+            print(f"  Tree Carbon Stock: {tree_carbon_stock:.2f} tC/ha")
+            print(f"  Avoided Biomass Burning Emissions: {avoided_emissions:.4f} tCO2/yr")
+    
+    average_avoided_emissions = total_avoided_emissions / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nFire Incidence Rate: {fire_incidence_rate:.4f}")
+        print(f"Combustion Factor (Comb_fac): {Comb_fac:.2f}")
+        print(f"Fire Emissions Factor (bio_ef): {bio_ef:.4f}")
+        print(f"Total area across all subregions: {total_area:.2f} ha")
+        print(f"Total Avoided Biomass Burning Emissions: {total_avoided_emissions:.4f} tCO2/yr")
+        print(f"Average Avoided Biomass Burning Emissions per hectare: {average_avoided_emissions:.4f} tCO2/ha/yr")
+    
+    return total_results
+
+### Step 5B.3: Define function to calculate biomass growth due to avoided fire
+def calculate_average_annual_biomass_growth(scenario, log_level='info'):
+    """
+    Calculate average annual biomass growth (Gtotal) for each subregion.
+    Parameters:
+    scenario (str): Scenario in question
+    
+    Returns:
+    list: Average annual biomass growth (tonnes d.m. ha-1 yr-1) for each subregion.
+    """
+    global data
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    total_results = []
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = float(subregion["area"])
+        
+        # Retrieve parameters from scenario data
+        R = float(scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass", 0))   # Root-to-shoot ratio
+        Iv = float(scenario_data.get("Iv", 0))  # Average net annual increment
+        BCEFi = float(scenario_data.get("BCEFi", 0))  # Biomass conversion and expansion factor
+        
+        # Calculate Gtotal
+        Gtotal = Iv * BCEFi * (1 + R)
+        
         subregion_result = {
             "aoi_id": aoi_id,
-            "forest_area": forest_area,
-            "tree_carbon_stock": tree_carbon_stock,
-            "avoided_biomass_burning_emissions": avoided_emissions
+            "area": area,
+            "Gtotal": Gtotal
         }
         
         total_results.append(subregion_result)
         
         if log_level == 'debug':
-            print(f"Subregion: {aoi_id}")
-            print(f"  Forest Area: {forest_area:.2f} ha")
-            print(f"  Tree Carbon Stock: {tree_carbon_stock:.2f} tC/ha")
-            print(f"  Fire Incidence Rate: {fire_incidence_rate:.4f}")
-            print(f"  Combustion Factor (Cf): {Cf:.2f}")
-            print(f"  Fire Emissions Factor (bio_ef): {bio_ef:.4f}")
-            print(f"  Avoided Biomass Burning Emissions: {avoided_emissions:.4f} tCO2/yr")
-            print()
+            print(f"Subregion {aoi_id}:")
+            print(f"  Area: {area:.2f} ha")
+            print(f"  R: {R:.4f}")
+            print(f"  Iv: {Iv:.4f} m3 ha-1 yr-1")
+            print(f"  BCEFi: {BCEFi:.4f}")
+            print(f"  Gtotal: {Gtotal:.4f} tonnes d.m. ha-1 yr-1")
+    
+    if log_level == 'debug':
+        total_area = sum(result['area'] for result in total_results)
+        total_Gtotal = sum(result['area'] * result['Gtotal'] for result in total_results)
+        average_Gtotal = total_Gtotal / total_area if total_area > 0 else 0
+        print(f"\nTotal area across all subregions: {total_area:.2f} ha")
+        print(f"Average Gtotal across all subregions: {average_Gtotal:.4f} tonnes d.m. ha-1 yr-1")
     
     return total_results
 
-# Example usage
-json_file_path = 'IFM_final.json'
-scenario = 'business_as_usual'  # or 'intervention'
 
-results = calculate_avoided_biomass_burning_emissions(json_file_path, scenario, log_level='debug')
+#### STEP 5C: Avoided Illegal Logging Total Biomass CO2 Calculations #######
 
-if results:
-    print("\nAvoided Fire and Biomass Burning Emissions Results:")
-    total_avoided_emissions = 0
-    for subregion in results:
-        print(f"AOI: {subregion['aoi_id']}")
-        print(f"  Forest Area: {subregion['forest_area']:.2f} ha")
-        print(f"  Tree Carbon Stock: {subregion['tree_carbon_stock']:.2f} tC/ha")
-        print(f"  Avoided Biomass Burning Emissions: {subregion['avoided_biomass_burning_emissions']:.4f} tCO2/yr")
-        print()
-        total_avoided_emissions += subregion['avoided_biomass_burning_emissions']
-    
-    print(f"Total Avoided Biomass Burning Emissions: {total_avoided_emissions:.4f} tCO2/yr")
-else:
-    print("Failed to calculate Avoided Fire and Biomass Burning Emissions.")
+######## Anthony to check how to obtain illegal logging rate (illegal_logging_rate) - it is in the json already
 
-# Print raw results for debugging
-print("\nRaw Results:")
-import pprint
-pprint.pprint(results)
-
-
-### TO DISCUSS ###
-
-
-#### Step 6.5: Estimate Emissions from Illegal Logging
-
-### Step 6.5.1: Emissions from Incidental Damage from Illegal Logging
-
-######## question: how do we obtain illegal logging rate (ILR)??? Need to include in json input file.
-
-
-
-##Define equation to calculate Carbon Emissions from Incidental Damage
+### Step 5C.1: Emissions from Incidental Damage from Illegal Logging
+## Define equation to calculate Carbon Emissions from Incidental Damage due to Illegal Logging
 def calculate_incidental_damage_illegal(scenario, log_level='info'):
     global data
     
@@ -1051,14 +1024,13 @@ def calculate_incidental_damage_illegal(scenario, log_level='info'):
         aoi_id = subregion["aoi_id"]
         area = subregion["area"]
         
-        VolExt = float(scenario_data.get("VolExt", 0))
         LDF_factor_1 = float(scenario_data.get("LDF_factor_1", 0))
         LDF_factor_2 = float(scenario_data.get("LDF_factor_2", 0))
-        ILR = float(scenario_data.get("ILR", 0))
+        illegal_logging_rate = float(scenario_data.get("illegal_logging_rate", 0)) # in json, Anthony to check the source for the illegal_logging_rate
         average_total_tco2e = float(scenario_data.get("average_total_tco2e", 0))
         
         LDF = LDF_factor_1 * average_total_tco2e + LDF_factor_2
-        IncidentalDamage_illegal = LDF * ILR
+        IncidentalDamage_illegal = LDF * illegal_logging_rate
         
         total_results.append({
             "aoi_id": aoi_id,
@@ -1069,7 +1041,7 @@ def calculate_incidental_damage_illegal(scenario, log_level='info'):
     
     return total_results
 
-##Define equation to calculate Illegal Logging Emissions from Trees
+### Step 5C.2: Define equation to calculate Illegal Logging Emissions from Trees
 def calculate_logging_emissions_illegal(scenario, log_level='info'):
     global data
     
@@ -1089,7 +1061,7 @@ def calculate_logging_emissions_illegal(scenario, log_level='info'):
         ElE_factor_2 = float(scenario_data.get("ElE_factor_2", 0))
         
         ELE = (ElE_factor_1 * D) - ElE_factor_2
-        TimberTree_illegal = area * ILR * ELE
+        TimberTree_illegal = area * illegal_logging_rate * ELE
         
         total_results.append({
             "aoi_id": aoi_id,
@@ -1105,7 +1077,7 @@ def calculate_logging_emissions_illegal(scenario, log_level='info'):
     
     return total_results
 
-##### Step 6.5.2: Estimate emissions from Community offtake
+### Step 5C.3: Estimate emissions from Community offtake
 def calculate_community_offtake_emissions(json_file_path, scenario, log_level='info'):
     data = load_json_data(json_file_path)
     scenario_data = data["scenarios"][scenario][0]
@@ -1115,8 +1087,8 @@ def calculate_community_offtake_emissions(json_file_path, scenario, log_level='i
     
     for subregion in aoi_subregions:
         aoi_id = subregion["aoi_id"]
-        community_area = float(subregion.get("area", 0))
-        community_offtake = float(subregion.get("community_offtake", 0))
+        forest_area = float(subregion.get("area", 0)) ## Anthony to check 
+        community_offtake = float(subregion.get("community_offtake", 0)) ## TO INCLUDE IN THE JSON FILE
         
         D = float(scenario_data.get("D", 0))  # Wood Density
         ElE_factor_1 = float(scenario_data.get("ElE_factor_1", 0))
@@ -1126,12 +1098,12 @@ def calculate_community_offtake_emissions(json_file_path, scenario, log_level='i
         ELE = (ElE_factor_1 * D) - ElE_factor_2
         
         # Calculate TimberTreecommunity
-        TimberTreecommunity = community_area * community_offtake * ELE
+        TimberTreecommunity = forest_area * community_offtake * ELE
         
         # Calculate Incidental DamageComm (assumed to be a fraction of TimberTreecommunity)
         # You may need to adjust this calculation based on your specific requirements
-        incidental_damage_fraction = float(scenario_data.get("incidental_damage_fraction", 0.1))
-        IncidentalDamageComm = TimberTreecommunity * incidental_damage_fraction
+        incidental_damage_fraction = float(scenario_data.get("incidental_damage_fraction", 0)) # added this to the json
+        IncidentalDamageComm = TimberTreecommunity * incidental_damage_fraction ## need to check if it's in the json
         
         # Calculate Community Offtake emissions
         community_offtake_emissions = (TimberTreecommunity + IncidentalDamageComm) * 44/12
@@ -1160,37 +1132,15 @@ def calculate_community_offtake_emissions(json_file_path, scenario, log_level='i
     
     return total_results
 
-# Testing
-json_file_path = 'FP_final.json'
-scenario = 'business_as_usual'  # or 'intervention'
-
-results = calculate_community_offtake_emissions(json_file_path, scenario, log_level='debug')
-
-if results:
-    print("\nCommunity Offtake Emissions Results:")
-    total_emissions = 0
-    for subregion in results:
-        print(f"AOI: {subregion['aoi_id']}")
-        print(f"  Community Area: {subregion['community_area']:.2f} ha")
-        print(f"  Community Offtake: {subregion['community_offtake']:.4f}")
-        print(f"  Community Offtake Emissions: {subregion['community_offtake_emissions']:.2f} tCO2/yr")
-        print()
-        total_emissions += subregion['community_offtake_emissions']
-    
-    print(f"Total Community Offtake Emissions: {total_emissions:.2f} tCO2/yr")
-else:
-    print("Failed to calculate Community Offtake Emissions.")
-
-# Print raw results for debugging
-print("\nRaw Results:")
-import pprint
-pprint.pprint(results)
 
 
-####### Step 7: Calculate all - equations for baseline and intervention emissions calculation
+####### Step 6: Calculate all - equations for baseline ######
+## 6A Baseline Avoided Deforestation
+## 6B Baseline Avoided Fire
+## 6C Baseline Avoided Illegal Logging
 
-### Step 7.1: Calculate all - baseline emissions
-def calculate_all_bau(scenario, log_level='info'):
+### Step 6A: Calculate all - Baseline Deforestation Scenario #####
+def calculate_all_bauAD(scenario, log_level='info'):
     result = {}
     
     average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario, log_level=log_level)
@@ -1208,16 +1158,80 @@ def calculate_all_bau(scenario, log_level='info'):
     carbon_stock_loss = calculate_carbon_stock_loss_yeari(deforested_area_yeari, average_agbd_tco2e, scenario=scenario, log_level=log_level)
     result["carbon_stock_loss"] = carbon_stock_loss
 
-    annual_baseline_biomass_co2_emissions = calculate_baseline_biomass_co2_emissions(historical_def_rate, carbon_stock_loss, scenario=scenario, log_level=log_level)
-    result["annual_baseline_biomass_co2_emissions"] = annual_baseline_biomass_co2_emissions
+    annual_biomass_growth_baseline = calculate_average_annual_biomass_growth(scenario=scenario, log_level=log_level)
+    result["annual_biomass_growth_baseline"] = annual_biomass_growth_baseline
+    
+    annual_biomass_carbon_stock_gain_baseline = calculate_delta_cg(scenario=scenario, log_level=log_level)
+    result["annual_biomass_carbon_stock_gain_baseline"] = annual_biomass_carbon_stock_gain_baseline
+    
+    annual_baseline_AD_biomass_co2_emissions = calculate_baseline_AD_biomass_co2_emissions(historical_def_rate, carbon_stock_loss, scenario=scenario, log_level=log_level)
+    result["annual_baseline_AD_biomass_co2_emissions"] = annual_baseline_AD_biomass_co2_emissions
     if log_level == 'debug':
-        print(f"Baseline Annual Biomass CO2 emissions: {annual_baseline_biomass_co2_emissions} tCO2e/yr")
+        print(f"Baseline AD Annual Biomass CO2 emissions: {annual_baseline_AD_biomass_co2_emissions} tCO2e/yr")
     return result
-result["yearly_baseline_emissions_trees"]
+
+### Step 6B: Calculate all - Baseline Emissions Fire Scenario ####
+def calculate_all_bau_AF(scenario, log_level='info'):
+    result = {}
+    
+    average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario, log_level=log_level)
+    result["average_agbd_tco2e"] = average_agbd_tco2e
+    
+    mean_annual_tot_c_stock_result = mean_annual_tot_c_stock(average_agbd_tco2e, scenario=scenario, log_level=log_level)
+    result["mean_annual_tot_c_stock"] = mean_annual_tot_c_stock_result
+    
+    annual_biomass_growth_baseline = calculate_average_annual_biomass_growth(scenario=scenario, log_level=log_level)
+    result["annual_biomass_growth_baseline"] = annual_biomass_growth_baseline
+    
+    annual_biomass_carbon_stock_gain_baseline = calculate_delta_cg(scenario=scenario, log_level=log_level)
+    result["annual_biomass_carbon_stock_gain_baseline"] = annual_biomass_carbon_stock_gain_baseline
+    
+    l_disturbance_baseline = calculate_ldisturbance(total_results, scenario=scenario, log_level=log_level)
+    result["l_disturbance_baseline"] = l_disturbance_baseline
+    
+    avoided_fire_emissions = calculate_avoided_biomass_burning_emissions(scenario=scenario, log_level=log_level)
+    result["avoided_fire_emissions"] = avoided_fire_emissions
+    if log_level == 'debug':
+        print(f"Baseline AF Annual Biomass CO2 emissions: {avoided_fire_emissions} tCO2e/yr")
+    return result
+
+### Step 6B: Calculate all - Baseline Emissions Illegal Logging ####
+
+def calculate_all_bau_AIL(scenario, log_level='info'):
+    result = {}
+    
+    average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario, log_level=log_level)
+    result["average_agbd_tco2e"] = average_agbd_tco2e
+    
+    mean_annual_tot_c_stock_result = mean_annual_tot_c_stock(average_agbd_tco2e, scenario=scenario, log_level=log_level)
+    result["mean_annual_tot_c_stock"] = mean_annual_tot_c_stock_result
+    
+    annual_biomass_growth_baseline = calculate_average_annual_biomass_growth(scenario=scenario, log_level=log_level)
+    result["annual_biomass_growth_baseline"] = annual_biomass_growth_baseline
+    
+    annual_biomass_carbon_stock_gain_baseline = calculate_delta_cg(scenario=scenario, log_level=log_level)
+    result["annual_biomass_carbon_stock_gain_baseline"] = annual_biomass_carbon_stock_gain_baseline
+    
+    loss_incidental_damage_illegal = calculate_incidental_damage_illegal(scenario=scenario, log_level=log_level)
+    result["incidental_damage_illegal"] = incidental_damage_illegal
+    
+    loss_illegal_logging_emissions = calculate_logging_emissions_illegal(scenario=scenario, log_level=log_level)
+    result["loss_illegal_logging_emissions"] = loss_illegal_logging_emissions
+    
+    community_offtake_emissions = calculate_community_offtake_emissions(scenario=scenario, log_level=log_level)
+    result["community_offtake_emissions"] = community_offtake_emissions
+    if log_level == 'debug':
+        print(f"Baseline AF Annual Biomass CO2 emissions: {avoided_fire_emissions} tCO2e/yr")
+    return result
 
 
-### Step 7.2: Calculate all - equations for intervention emissions calculation
-def calculate_all_bau(scenario, log_level='info'):
+####### Step 7: Calculate all - equations for interventions ######
+## 7A Sub-intervention Avoided Deforestation scenario
+## 7B Sub-intervention Avoided Fire scenario
+## 7C Sub-intervention Avoided Illegal Logging scenario
+
+#### Step 7A: Calculate all - Avoided Deforestation Scenario 
+def calculate_all_int_AD(scenario, log_level='info'):
     result = {}
     
     average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario, log_level=log_level)
@@ -1229,24 +1243,18 @@ def calculate_all_bau(scenario, log_level='info'):
     actual_area_deforested_each_year = calculate_actual_area_deforested_year_n(scenario=scenario, log_level=log_level)
     result["actual_area_deforested_each_year"] = actual_area_deforested_each_year
     
-    forest_area_each_year = calculate_forest_area_end_of_year_n(scenario=scenario, n=20)
-    result["forest_area_each_year"] = forest_area_each_year
-    
     area_avoided_deforestation_year_n = calculate_area_avoided_deforestation_year_n(scenario=scenario, log_level=log_level)
     result["area_avoided_deforestation_year_n"] = area_avoided_deforestation_year_n
     
     yearly_avoided_emissions_trees = calculate_avoided_emissions_trees_each_year(scenario=scenario, log_level=log_level)
     result["yearly_avoided_emissions_trees"] = yearly_avoided_emissions_trees
     
-    yearly_biomass_growth = calculate_average_annual_biomass_growth(scenario=scenario, log_level=log_level)
-    result["yearly_biomass_growth"] = yearly_biomass_growth
+    annual_biomass_growth_AD = calculate_average_annual_biomass_growth(scenario=scenario, log_level=log_level)
+    result["annual_biomass_growth_AD"] = annual_biomass_growth_AD
     
-    yearly_increase_biomass_stock = calculate_annual_biomass_carbon_stock_increase(scenario=scenario, log_level=log_level)
-    result["yearly_increase_biomass_stock"] = yearly_increase_biomass_stock
-    
-    yearly_decrease_biomass_stock= calculate_delta_cl(scenario=scenario, log_level=log_level)
-    result["yearly_decrease_biomass_stock"] = yearly_decrease_biomass_stock
-    
+    annual_biomass_carbon_stock_gain_AD = calculate_delta_cg(scenario=scenario, log_level=log_level)
+    result["annual_biomass_carbon_stock_gain_AD"] = annual_biomass_carbon_stock_gain_AD
+
     yearly_avoided_burning = calculate_avoided_biomass_burning_emissions(scenario=scenario, log_level=log_level)
     result["yearly_decrease_biomass_stock"] = yearly_decrease_biomass_stock
     
@@ -1260,9 +1268,66 @@ def calculate_all_bau(scenario, log_level='info'):
     result["community_offtake_emissions"] = community_offtake_emissions
     
     return result
-result["yearly_avoided_emissions_trees"]
 
-#### Step 8: Calculate bau and intervention scenarios and difference between both
+#### Step 7B: Calculate all - Avoided Fire Scenario 
+def calculate_all_int_AD(scenario, log_level='info'):
+    result = {}
+    
+    average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario, log_level=log_level)
+    result["average_agbd_tco2e"] = average_agbd_tco2e
+    
+    mean_annual_tot_c_stock_result = mean_annual_tot_c_stock(average_agbd_tco2e, scenario=scenario, log_level=log_level)
+    result["mean_annual_tot_c_stock"] = mean_annual_tot_c_stock_result
+    
+    annual_biomass_growth_AF = calculate_average_annual_biomass_growth(scenario=scenario, log_level=log_level)
+    result["annual_biomass_growth_AF"] = annual_biomass_growth_AF
+    
+    annual_biomass_carbon_stock_gain_AF = calculate_delta_cg(scenario=scenario, log_level=log_level)
+    result["annual_biomass_carbon_stock_gain_AF"] = annual_biomass_carbon_stock_gain_AF
+
+    yearly_avoided_burning = calculate_avoided_biomass_burning_emissions(scenario=scenario, log_level=log_level)
+    result["yearly_decrease_biomass_stock"] = yearly_decrease_biomass_stock
+    
+    loss_incidental_damage_illegal = calculate_incidental_damage_illegal(scenario=scenario, log_level=log_level)
+    result["incidental_damage_illegal"] = incidental_damage_illegal
+    
+    loss_illegal_logging_emissions = calculate_logging_emissions_illegal(scenario=scenario, log_level=log_level)
+    result["loss_illegal_logging_emissions"] = loss_illegal_logging_emissions
+    
+    community_offtake_emissions = calculate_community_offtake_emissions(scenario=scenario, log_level=log_level)
+    result["community_offtake_emissions"] = community_offtake_emissions
+    
+    return result
+
+#### Step 7C: Calculate all - Avoided Illegal Logging and Community Offtake Scenario 
+def calculate_all_int_AD(scenario, log_level='info'):
+    result = {}
+    
+    average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario, log_level=log_level)
+    result["average_agbd_tco2e"] = average_agbd_tco2e
+    
+    mean_annual_tot_c_stock_result = mean_annual_tot_c_stock(average_agbd_tco2e, scenario=scenario, log_level=log_level)
+    result["mean_annual_tot_c_stock"] = mean_annual_tot_c_stock_result
+    
+    annual_biomass_growth_AIL = calculate_average_annual_biomass_growth(scenario=scenario, log_level=log_level)
+    result["annual_biomass_growth_AIL"] = annual_biomass_growth_AIL
+    
+    annual_biomass_carbon_stock_gain_AIL = calculate_delta_cg(scenario=scenario, log_level=log_level)
+    result["annual_biomass_carbon_stock_gain_AIL"] = annual_biomass_carbon_stock_gain_AIL
+
+    loss_incidental_damage_illegal = calculate_incidental_damage_illegal(scenario=scenario, log_level=log_level)
+    result["incidental_damage_illegal"] = incidental_damage_illegal
+    
+    loss_illegal_logging_emissions = calculate_logging_emissions_illegal(scenario=scenario, log_level=log_level)
+    result["loss_illegal_logging_emissions"] = loss_illegal_logging_emissions
+    
+    community_offtake_emissions = calculate_community_offtake_emissions(scenario=scenario, log_level=log_level)
+    result["community_offtake_emissions"] = community_offtake_emissions
+    
+    return result
+
+
+#### Step 8: Calculate differnce between bau and intervention scenarios #####
 
 biomass = {
     "business_as_usual": calculate_all_bau(scenario="business_as_usual"),
@@ -1520,8 +1585,6 @@ def GHGcalc(aoi_id: str, df: pd.DataFrame, nx: int, intervention_subcategory: st
         if "change in fire management" in intervention_subcategory:
             fire_n2o_ef = np.random.normal(temp_bau['burning_n2o_ef_mean'].values[0], temp_bau['burning_n2o_ef_sd'].values[0])
             fire_ch4_ef = np.random.normal(temp_bau['burning_ch4_ef_mean'].values[0], temp_bau['burning_ch4_ef_sd'].values[0])
-            #co equation
-            #nox equation
             
             # BAU scenario
             if temp_bau['fire_used'].values[0] == "True":
