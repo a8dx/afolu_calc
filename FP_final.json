@@ -66,8 +66,8 @@
               "FMG":"1.14",
               "FMG_error_negative":"-8",
               "FMG_error_positive":"8",
-              "ef_ch4":"58",
-              "Nex":"0.47"
+              "ef_ch4":"58", ### JS:Doesn't appear in py script
+              "Nex":"0.47" ### JS:Doesn't appear in py script
           },
           {
             "aoi_id": "tropicalmoist_ferralsols",
