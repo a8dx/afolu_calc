@@ -1,6 +1,6 @@
 {
   "intervention_type": "Improved Forest Management",
-  "intervention_subcategory": "reduced impact logging, extended rotation, stop logging",
+  "intervention_subcategory": "reduced_impact_logging, extended_rotation, stop_logging, fuelwood",
   "scenarios": {
     "common": [
       {
@@ -22,7 +22,7 @@
         "below_ground_biomass_to_above_ground_biomass_error_negative": -45,
         "below_ground_biomass_to_above_ground_biomass_error_positive": 45,
         "forest_area": 1000,
-        "AHA": 500,
+        "AHA_perc": 0.5,
         "VolExt": 20,
         "C_timber": 0.55,
         "prop_ox": 0.25,
@@ -38,6 +38,9 @@
         "Gw": 2,
         "BEF": 3,
         "half_life_wp": 6,
+        "FGtrees": 300.0,
+        "FGpart": 200.0,
+        "BCEFr": 0.5,
         "aoi_subregions": [
           {
             "aoi_id": "tropicalmoist_acrisols",
@@ -103,7 +106,7 @@
         "below_ground_biomass_to_above_ground_biomass_error_negative": -45,
         "below_ground_biomass_to_above_ground_biomass_error_positive": 45,
         "forest_area": 1000,
-        "AHA": 500,
+        "AHA_perc": 0.5,
         "VolExt": 10,
         "C_timber": 0.55,
         "prop_ox": 0.25,
@@ -119,6 +122,9 @@
         "Gw": 2,
         "BEF": 3,
         "half_life_wp": 6,
+        "FGtrees": 300.0,
+        "FGpart": 200.0,
+        "BCEFr": 0.5,
         "aoi_subregions": [
           {
             "aoi_id": "tropicalmoist_acrisols",
