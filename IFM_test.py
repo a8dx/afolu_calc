@@ -8,8 +8,8 @@
 # Filename: IFM_final.py
 # Author: Barbara Bomfim
 # Date Started: 07/14/2024
-# Last Edited: 09/19/2024
-# Purpose: AFOLU GHG Calculations for Improved Forest Management Interventions (RIL and Extended Rotation)
+# Last Edited: 09/26/2024
+# Purpose: AFOLU GHG Calculations for Improved Forest Management Interventions (RIL, Extended Rotation, Stop Logging)
 # **********************************************************************************************************/
 
 #### Required Inputs ####
@@ -232,7 +232,10 @@ def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
     
     return total_results
 
+##### REDUCED-IMPACTC LOGGING SUB-INTERVENTION #######
+
 ### STEP 4: Annual CO2 Calculations for both Baseline and RIL intervention #########
+
 ## Equations:
 # Logging emissions - baseline and RIL same equations
 # Carbon stored in long-term wood products - baseline and RIL same equations
@@ -275,7 +278,51 @@ def calculate_logging_emissions(scenario, log_level='info'):
     return total_results
 
 ## Step 4.2-RIL: Define equation to calculate carbon stored in long-term wood products
+# def calculate_carbon_wood_products(scenario, log_level='info'):
+#     global data
+#     
+#     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+#     aoi_subregions = scenario_data.get("aoi_subregions", [])
+#     
+#     total_results = []
+#     
+#     for subregion in aoi_subregions:
+#         aoi_id = subregion["aoi_id"]
+#         area = subregion["area"]
+#         
+#         C_timber = float(scenario_data.get("C_timber", 0))
+#         r_w = float(scenario_data.get("r_w", 0)) # this is a standard, fixed value
+#         prop_ox = 0.25
+#         #prop_ox = float(scenario_data.get("prop_ox", 0))
+#         prop_ox_long = 0.947
+#         #prop_ox_long = float(scenario_data.get("prop_ox_long", 0))
+#         
+#         C_ww = C_timber * r_w
+#         C_slp = (C_timber - C_ww) * prop_ox
+#         C_addlox = (C_timber - C_ww - C_slp) * prop_ox_long
+#         
+#         WoodProducts = C_timber - (C_ww + C_slp + C_addlox)
+#         
+#         total_results.append({
+#             "aoi_id": aoi_id,
+#             "area": area,
+#             "WoodProducts": WoodProducts
+#         })
+#         
+#         if log_level == 'debug':
+#             print(f"Subregion {aoi_id}:")
+#             print(f"  Carbon in timber class: {C_timber:.2f} t C")
+#             print(f"  Carbon in wood waste class: {C_ww:.2f} t C")
+#             print(f"  Carbon oxidized in less than 5 years: {C_slp:.2f} t C")
+#             print(f"  Carbon oxidized between 5-100 years: {C_addlox:.2f} t C")
+#             print(f"  Carbon permanently stored in long term wood products: {WoodProducts:.2f} t C")
+#     
+#     return total_results
+
+### edited code
+
 def calculate_carbon_wood_products(scenario, log_level='info'):
+
     global data
     
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
@@ -288,33 +335,41 @@ def calculate_carbon_wood_products(scenario, log_level='info'):
         area = subregion["area"]
         
         C_timber = float(scenario_data.get("C_timber", 0))
-        r_w = float(scenario_data.get("r_w", 0)) # this is a standard, fixed value
+        r_w = float(scenario_data.get("r_w", 0))  # this is a standard, fixed value
         prop_ox = 0.25
-        #prop_ox = float(scenario_data.get("prop_ox", 0))
         prop_ox_long = 0.947
-        #prop_ox_long = float(scenario_data.get("prop_ox_long", 0))
         
         C_ww = C_timber * r_w
-        C_slp = (C_timber - C_ww) * prop_ox
-        C_addlox = (C_timber - C_ww - C_slp) * prop_ox_long
+        C_remaining = C_timber - C_ww
         
-        WoodProducts = C_timber - (C_ww + C_slp + C_addlox)
+        wood_products = [C_remaining] * 100  # Initialize with initial carbon for 100 years
+        
+        # Apply prop_ox for years 1-5
+        for year in range(1, 6):
+            oxidized = wood_products[year-1] * prop_ox / 5  # Divide by 5 to distribute over 5 years
+            wood_products[year] -= oxidized
+        
+        # Apply prop_ox_long for years 5-99
+        for year in range(5, 100):
+            oxidized = wood_products[year-1] * prop_ox_long / 95  # Divide by 95 to distribute over 95 years
+            wood_products[year] -= oxidized
         
         total_results.append({
             "aoi_id": aoi_id,
             "area": area,
-            "WoodProducts": WoodProducts
+            "WoodProducts": wood_products
         })
         
         if log_level == 'debug':
             print(f"Subregion {aoi_id}:")
-            print(f"  Carbon in timber class: {C_timber:.2f} t C")
-            print(f"  Carbon in wood waste class: {C_ww:.2f} t C")
-            print(f"  Carbon oxidized in less than 5 years: {C_slp:.2f} t C")
-            print(f"  Carbon oxidized between 5-100 years: {C_addlox:.2f} t C")
-            print(f"  Carbon permanently stored in long term wood products: {WoodProducts:.2f} t C")
+            print(f"  Initial carbon in timber: {C_timber:.2f} t C")
+            print(f"  Carbon in wood waste: {C_ww:.2f} t C")
+            print(f"  Initial carbon in wood products: {wood_products[0]:.2f} t C")
+            print(f"  Carbon in wood products after 5 years: {wood_products[5]:.2f} t C")
+            print(f"  Carbon in wood products after 100 years: {wood_products[-1]:.2f} t C")
     
     return total_results
+
 
 ## Step 4.3-RIL: Define equation to calculate Carbon Emissions from Incidental Damage
 def calculate_incidental_damage(scenario, log_level='info'):
@@ -386,7 +441,65 @@ def calculate_logging_infrastructure(scenario, log_level='info'):
     
     return total_results
 
-## Step 4.5-RIL: Estimate Total Logging Emissions
+### Estimate carbon loss due to fuelwood consumption ###
+## Step 4.5-RIL: Define Lfuelwood equation
+def calculate_lfuelwood(scenario, log_level='info'):
+    """
+    Calculate Lfuelwood using the provided equation for each subregion.
+    Parameters:
+    scenario (str): Scenario in question
+    Returns:
+    list: Annual biomass carbon loss due to fuelwood removals in tCO2e/yr for each subregion.
+    """
+    global data
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    results = []
+    total_lfuelwood = 0
+    total_area = 0
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
+        
+        FGtrees = scenario_data.get("FGtrees")
+        FGpart = scenario_data.get("FGpart")
+        BCEFr = scenario_data.get("BCEFr")
+        ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
+        D = scenario_data.get("D")
+        CF = scenario_data.get("CF")
+        
+        if None in [FGtrees, FGpart, BCEFr, ratio, D, CF]:
+            if log_level == 'debug':
+                print(f"Missing data for calculating Lfuelwood in subregion {aoi_id}. Please check your data for scenario {scenario}.")
+            continue
+        
+        lfuelwood = ((FGtrees * BCEFr * (1 + ratio)) + FGpart * D) * CF * (44 / 12) * (area / scenario_data.get("area_converted_yr", 1))
+        
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "lfuelwood": lfuelwood
+        })
+        
+        total_lfuelwood += lfuelwood
+        total_area += area
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Annual biomass carbon loss due to fuelwood removals: {lfuelwood:.2f} tCO2e/yr")
+            print(f"  Area: {area:.2f} ha")
+    
+    average_lfuelwood = total_lfuelwood / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nTotal annual biomass carbon loss due to fuelwood removals across all subregions: {total_lfuelwood:.2f} tCO2e/yr")
+        print(f"Average annual biomass carbon loss due to fuelwood removals per hectare: {average_lfuelwood:.2f} tCO2e/ha/yr")
+    
+    return results
+
+## Step 4.6-RIL: Estimate Total Logging Emissions
 def calculate_total_logging_emissions(scenario, log_level='info'):
     global data
     
@@ -397,6 +510,7 @@ def calculate_total_logging_emissions(scenario, log_level='info'):
     wood_products_results = calculate_carbon_wood_products(scenario, log_level)
     incidental_damage_results = calculate_incidental_damage(scenario, log_level)
     logging_infrastructure_results = calculate_logging_infrastructure(scenario, log_level)
+    fuelwood_results = calculate_lfuelwood(scenario, log_level)
     
     total_results = []
     
@@ -408,8 +522,9 @@ def calculate_total_logging_emissions(scenario, log_level='info'):
         wood_products = next(item for item in wood_products_results if item["aoi_id"] == aoi_id)["WoodProducts"]
         incidental_damage = next(item for item in incidental_damage_results if item["aoi_id"] == aoi_id)["IncidentalDamage"]
         logging_infrastructure = next(item for item in logging_infrastructure_results if item["aoi_id"] == aoi_id)["LoggingInfrastructure"]
+        fuelwood_emissions = next(item for item in fuelwood_results if item["aoi_id"] == aoi_id)["average_lfuelwood"]
         
-        Logging_Emissions = ((timber_tree - wood_products) + incidental_damage + logging_infrastructure) * (44 / 12)
+        Logging_Emissions = ((timber_tree - wood_products) + incidental_damage + logging_infrastructure + fuelwood_emissions) * (44 / 12)
         
         total_results.append({
             "aoi_id": aoi_id,
@@ -441,33 +556,6 @@ def calculate_all(scenario, log_level='info'):
     result["Logging_Emissions"] = logging_emissions
     
     return result
-
-# # biomass = {}
-# # biomass["business_as_usual"] = calculate_all(scenario="business_as_usual")
-# # biomass["intervention"] = calculate_all(scenario="intervention")
-# # 
-# # biomass_co2_result = {}
-# # 
-# # for inter_item, bau_item in zip(biomass["intervention"]["Logging_Emissions"], 
-# #                                 biomass["business_as_usual"]["Logging_Emissions"]):
-# #     if inter_item['aoi_id'] != bau_item['aoi_id']:
-# #         raise ValueError(f"Mismatched aoi_ids: {inter_item['aoi_id']} and {bau_item['aoi_id']}")
-# #     
-# #     aoi_id = inter_item['aoi_id']
-# #     difference = inter_item['Logging_Emissions'] - bau_item['Logging_Emissions']
-# #     
-# #     biomass_co2_result[aoi_id] = difference# inter_result = calculate_all(scenario="intervention")
-# # 
-# # print(biomass_co2_result)
-# # 
-# # biomass_co2_result_error_positive = 10  # Assuming this is a percentage
-# # 
-# # biomass_co2_sd = {}
-# # 
-# # for aoi_id, difference in biomass_co2_result.items():
-# #     # Calculate SD for each aoi_id
-# #     sd = (abs(difference) * biomass_co2_result_error_positive / 100) / 1.96
-# #     biomass_co2_sd[aoi_id] = sd
 
 biomass = {
     "business_as_usual": calculate_all(scenario="business_as_usual"),
@@ -696,71 +784,14 @@ def calculate_ery(json_file_path):
         'ERY': ery
     }
 
-# testing
-json_file_path = 'IFM_final.json'
-result = calculate_ery(json_file_path)
-if result:
-    print(f"Business-as-usual RL: {result['business_as_usual_RL']} years")
-    print(f"Intervention RL: {result['intervention_RL']} years")
-    print(f"Extended Rotation Years (ERY): {result['ERY']} years")
-else:
-    print("Failed to calculate ERY. Please check the error messages above.")
-
-
 ## Step 4.2-ER: Define equation to calculate Biomass Accumulation due to ER
 
-# def calculate_extended_rotation_live_biomass(scenario, log_level='info'):
-#     global data
-#     
-#     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
-#     ratio = scenario_data["ratio_below_ground_biomass_to_above_ground_biomass"]
-#     aoi_subregions = scenario_data.get("aoi_subregions", [])
-#     
-#     total_results = []
-#     
-#     for subregion in aoi_subregions:
-#         aoi_id = subregion["aoi_id"]
-#         area = subregion["area"]
-#         
-#         average_agbd_tco2e = subregion["carbon_stock"]
-#         average_bgbd_tco2e = convert_to_bgb(average_agbd_tco2e, ratio)
-#         average_total_tco2e = average_agbd_tco2e + average_bgbd_tco2e
-#         
-#         RLbau = float(scenario_data.get("RLbau", 0)) # to check: rotation length bau
-#         RLint = float(scenario_data.get("RLint", 0)) #to check: rotation length int
-#         GR = float(scenario_data.get("GR", 0))
-#         RS = float(scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass", 0))
-#         
-#         ERY = RLint - RLbau
-#         ERB = (average_agbd_tco2e + (ERY * GR)) * (1 + RS)
-#         
-#         total_results.append({
-#             "aoi_id": aoi_id,
-#             "area": area,
-#             "ERB": ERB
-#         })
-#         
-#         if log_level == 'debug':
-#             print(f"Subregion {aoi_id}:")
-#             print(f"Extended rotation live biomass: {ERB:.2f} t CO2e")
-#     
-#     return total_results
+# step 4.2.1: Define equation to obtain Gtotal (gain in carbon per hectare per year)
+#### STEP 5: Define function to estimate average annual biomass growth in Baseline Scenario
+def calculate_average_annual_biomass_growth(scenario, log_level='info'):
 
-def calculate_extended_rotation_live_biomass(json_file_path, scenario, log_level='info'):
-    # Load JSON data
-    with open(json_file_path, 'r') as file:
-        data = json.load(file)
-    
-    # Calculate ERY
-    ery_result = calculate_ery(json_file_path)
-    if ery_result is None:
-        print("Failed to calculate ERY. Cannot proceed with extended rotation calculation.")
-        return None
-    
-    ERY = ery_result['ERY']
-    
+    global data
     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
-    ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass", 0)
     aoi_subregions = scenario_data.get("aoi_subregions", [])
     
     total_results = []
@@ -769,95 +800,100 @@ def calculate_extended_rotation_live_biomass(json_file_path, scenario, log_level
         aoi_id = subregion["aoi_id"]
         area = float(subregion["area"])
         
-        average_agbd_tco2e = float(subregion.get("carbon_stock", 0))
-        average_bgbd_tco2e = convert_to_bgb(average_agbd_tco2e, ratio)
-        average_total_tco2e = average_agbd_tco2e + average_bgbd_tco2e
+        # Retrieve parameters from scenario data
+        R = float(scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass", 0))
+        Gw = float(scenario_data.get("Gw", 0)) ## new variable added to json file, obtained from Tables 3A.1.5 and 3A1.6
+        CF = float(scenario_data.get("CF", 0))
         
-        GR = float(scenario_data.get("GR", 0))
-        RS = float(scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass", 0))
+        # Calculate Gtotal
+        Gtotal = Gw * (1 + R) * CF * 44/12
         
-        ERB = (average_agbd_tco2e + (ERY * GR)) * (1 + RS)
-        
-        total_results.append({
+        subregion_result = {
             "aoi_id": aoi_id,
             "area": area,
-            "ERB": ERB
-        })
+            "Gtotal": Gtotal
+        }
+        
+        total_results.append(subregion_result)
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Area: {area:.2f} ha")
+            print(f"  R: {R:.4f}")
+            print(f"  Iv: {Iv:.4f} m3 ha-1 yr-1")
+            print(f"  BCEFi: {BCEFi:.4f}")
+            print(f"  Gtotal: {Gtotal:.4f} tonnes d.m. ha-1 yr-1")
+    
+    if log_level == 'debug':
+        total_area = sum(result['area'] for result in total_results)
+        total_Gtotal = sum(result['area'] * result['Gtotal'] for result in total_results)
+        average_Gtotal = total_Gtotal / total_area if total_area > 0 else 0
+        print(f"\nTotal area across all subregions: {total_area:.2f} ha")
+        print(f"Average Gtotal across all subregions: {average_Gtotal:.4f} tonnes d.m. ha-1 yr-1")
+    
+    return total_results
+
+## Step 4.2.2: Define equation to calculate gain in carbon stock due to extended rotation
+def calculate_extended_rotation_live_biomass(scenario, log_level='info'):
+    """
+    Calculate the gain in carbon stock due to extended rotation for each subregion.
+    Parameters:
+    scenario (str): Scenario in question
+    
+    Returns:
+    list: Updated total_results with Extended Rotation Biomass (ERB) in tCO2e for each subregion.
+    """
+    global data, total_results  # Assuming total_results is saved globally from step 4.2.1
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    # Calculate ERY
+    ery_result = calculate_ery(scenario)
+    if ery_result is None:
+        print("Failed to calculate ERY. Cannot proceed with extended rotation calculation.")
+        return None
+    
+    ERY = ery_result['ERY']
+    
+    for result in total_results:
+        aoi_id = result["aoi_id"]
+        area = float(result["area"])
+        Gtotal = result["Gtotal"]
+        
+        subregion = next((s for s in aoi_subregions if s["aoi_id"] == aoi_id), None)
+        if subregion is None:
+            print(f"Warning: No subregion data found for AOI {aoi_id}. Skipping this subregion.")
+            continue
+        
+        average_agbd_tco2e = float(subregion.get("carbon_stock", 0))
+        R = float(scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass", 0))
+        
+        ERB = (average_agbd_tco2e + (ERY * Gtotal)) * (1 + R)
+        
+        # Add ERB to the existing result dictionary
+        result["ERB"] = ERB
         
         if log_level == 'debug':
             print(f"Subregion {aoi_id}:")
             print(f"  Area: {area:.2f} ha")
             print(f"  Average AGBD: {average_agbd_tco2e:.2f} tCO2e/ha")
             print(f"  ERY: {ERY:.2f} years")
-            print(f"  Growth Rate (GR): {GR:.2f} tCO2e/ha/year")
+            print(f"  Gtotal: {Gtotal:.4f} tCO2e/ha/year")
             print(f"  Root-to-Shoot Ratio (RS): {RS:.2f}")
             print(f"  Extended Rotation Biomass (ERB): {ERB:.2f} tCO2e")
     
-    return total_results
-
-# testing to check results
-json_file_path = 'IFM_final.json'
-scenario = 'intervention'  # or 'business_as_usual'
-results = calculate_extended_rotation_live_biomass(json_file_path, scenario, log_level='debug')
-
-if results:
-    print("\nExtended Rotation Live Biomass Results:")
-    for result in results:
-        print(f"AOI: {result['aoi_id']}")
-        print(f"  Area: {result['area']:.2f} ha")
-        print(f"  ERB: {result['ERB']:.2f} tCO2e")
+    if log_level == 'debug':
+        total_area = sum(result['area'] for result in total_results)
+        total_ERB = sum(result.get('ERB', 0) for result in total_results)
+        average_ERB = total_ERB / total_area if total_area > 0 else 0
+        print(f"\nTotal area across all subregions: {total_area:.2f} ha")
+        print(f"Total Extended Rotation Biomass: {total_ERB:.2f} tCO2e")
+        print(f"Average Extended Rotation Biomass per hectare: {average_ERB:.4f} tCO2e/ha")
     
-    total_erb = sum(result['ERB'] for result in results)
-    print(f"\nTotal Extended Rotation Biomass: {total_erb:.2f} tCO2e")
-else:
-    print("Failed to calculate Extended Rotation Live Biomass.")
+    return total_results
 
 
 ### Step 4.3-ER: Define equation to calculate carbon in wood products due to ER
-# def calculate_wood_products_extended_rotation(scenario, log_level='info'):
-#     global data
-#     
-#     scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
-#     aoi_subregions = scenario_data.get("aoi_subregions", [])
-#     
-#     total_results = []
-#     
-#     for subregion in aoi_subregions:
-#         aoi_id = subregion["aoi_id"]
-#         area = subregion["area"]
-#         
-#         average_agbd_tco2e = subregion["carbon_stock"]
-#         RLbau = float(scenario_data.get("RLbau", 0)) # to check
-#         RLint = float(scenario_data.get("RLint", 0)) # to check
-#         GR = float(scenario_data.get("GR", 0)) #growth rate
-#         BEF = float(scenario_data.get("BEF", 0)) #Biomass Expansion Factor
-#         
-#         ERY = RLint - RLbau
-#         WPER0 = (average_agbd_tco2e + (ERY * GR)) / BEF
-#         
-#         result = {
-#             "aoi_id": aoi_id,
-#             "area": area,
-#             "WPER0": WPER0
-#         }
-#         
-#         if t is not None:
-#             half_life_wp = float(scenario_data.get("half_life_wp", 0))
-#             WPERt = math.exp(-((math.log(0.5) / half_life_wp) * t)) * WPER0
-#             result["WPERt"] = WPERt
-#             
-#             if log_level == 'debug':
-#                 print(f"Subregion {aoi_id}:")
-#                 print(f"  Wood products at time t extended rotation: {WPERt:.2f} t CO2e")
-#         
-#         total_results.append(result)
-#         
-#         if log_level == 'debug' and t is None:
-#             print(f"Subregion {aoi_id}:")
-#             print(f"  Wood products at time zero extended rotation: {WPER0:.2f} t CO2e")
-#     
-#     return total_results
-
 def calculate_wood_products_extended_rotation(json_file_path, scenario, t=None, log_level='info'):
     # Load JSON data
     with open(json_file_path, 'r') as file:
@@ -917,70 +953,7 @@ def calculate_wood_products_extended_rotation(json_file_path, scenario, t=None, 
     
     return total_results
 
-# testing
-json_file_path = 'IFM_final.json'
-scenario = 'intervention'  # or 'business_as_usual'
-t = 10  # Example time for WPERt calculation, set to None if not needed
-results = calculate_wood_products_extended_rotation(json_file_path, scenario, t, log_level='debug')
-
-if results:
-    print("\nWood Products for Extended Rotation Results:")
-    for result in results:
-        print(f"AOI: {result['aoi_id']}")
-        print(f"  Area: {result['area']:.2f} ha")
-        print(f"  WPER0: {result['WPER0']:.2f} tCO2e")
-        if 'WPERt' in result:
-            print(f"  WPERt (t={t}): {result['WPERt']:.2f} tCO2e")
-    
-    total_wper0 = sum(result['WPER0'] for result in results)
-    print(f"\nTotal Wood Products at time zero: {total_wper0:.2f} tCO2e")
-    if t is not None:
-        total_wpert = sum(result['WPERt'] for result in results if 'WPERt' in result)
-        print(f"Total Wood Products at time {t}: {total_wpert:.2f} tCO2e")
-else:
-    print("Failed to calculate Wood Products for Extended Rotation.")
-
-
-# Step 4.4-ER: Define equation to calculate the live biomass benefit of extended rotation
-def calculate_benefit_extended_rotation_live_biomass(scenario, log_level='info'):
-    global data
-    
-    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
-    ratio = scenario_data["ratio_below_ground_biomass_to_above_ground_biomass"]
-    aoi_subregions = scenario_data.get("aoi_subregions", [])
-    
-    total_results = []
-    
-    for subregion in aoi_subregions:
-        aoi_id = subregion["aoi_id"]
-        area = subregion["area"]
-        RLbau = float(scenario_data.get("RLbau", 0))
-        RLint = float(scenario_data.get("RLint", 0))
-        GR = float(scenario_data.get("GR", 0))
-        RS = float(scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass", 0))
-        
-        average_agbd_tco2e = subregion["carbon_stock"]
-        average_bgbd_tco2e = convert_to_bgb(average_agbd_tco2e, ratio)
-        average_total_tco2e = average_agbd_tco2e + average_bgbd_tco2e
-        
-        ERY = RLint - RLbau
-        ERB = (average_agbd_tco2e + (ERY * GR)) * (1 + RS)
-        
-        benefit_live_biomass_ER = ((ERB * area) - (average_total_tco2e * area)) * (44 / 12)
-        
-        total_results.append({
-            "aoi_id": aoi_id,
-            "area": area,
-            "benefit_live_biomass_ER": benefit_live_biomass_ER
-        })
-        
-        if log_level == 'debug':
-            print(f"Subregion {aoi_id}:")
-            print(f"  Total benefit long term live biomass extended rotation: {benefit_live_biomass_ER:.2f} t CO2e")
-    
-    return total_results
-
-## Step 4.5: Define equation to calculate the wood products benefit of extended rotation
+## Step 4.4-ER: Define equation to calculate the wood products benefit of extended rotation
 def calculate_benefit_extended_rotation_wood_products(scenario, log_level='info'):
     global data
     
@@ -1007,7 +980,7 @@ def calculate_benefit_extended_rotation_wood_products(scenario, log_level='info'
     
     return total_results
 
-## Step 4.6: Define equation to calculate Total Benefits of ER
+## Step 4.5-ER: Define equation to calculate Total Benefits of ER
 def calculate_total_benefits(scenario, log_level='info'):
     global data
     
@@ -1037,73 +1010,6 @@ def calculate_total_benefits(scenario, log_level='info'):
     
     return total_results
   
-  
-# edited code to combine steps 4.4, 4.5 and 4.6
-def calculate_extended_rotation_benefits(json_file_path, scenario, log_level='info'):
-    data = load_json_data(json_file_path)
-    ERY = calculate_ery(data)
-    scenario_data = data['scenarios'][scenario][0]
-    
-    # Retrieve 'years' from the JSON file
-    years = float(scenario_data.get('years', 0))
-    if years == 0:
-        print("Warning: 'years' not found in the JSON file or set to 0. Please check your input data.")
-    
-    results = []
-    
-    for subregion in scenario_data['aoi_subregions']:
-        aoi_id = subregion['aoi_id']
-        area = float(subregion['area'])
-        average_agbd_tco2e = float(subregion['carbon_stock'])
-        
-        GR = float(scenario_data['GR'])
-        RS = float(scenario_data['ratio_below_ground_biomass_to_above_ground_biomass'])
-        BEF = float(scenario_data['BEF'])
-        half_life_wp = float(scenario_data['half_life_wp'])
-        
-        # Step 4.4: Live biomass benefit
-        average_total_tco2e = average_agbd_tco2e * (1 + RS)
-        ERB = (average_agbd_tco2e + (ERY * GR)) * (1 + RS)
-        benefit_live_biomass_ER = (ERB - average_total_tco2e) * area * (44 / 12)
-        
-        # Step 4.5: Wood products benefit
-        WPER0 = ERB / BEF
-        WPERt = WPER0 * math.exp(-((math.log(0.5) / half_life_wp) * years))
-        benefit_wood_products_ER = (WPERt - WPER0) * area * (44 / 12)
-        
-        # Step 4.6: Total benefits
-        total_benefits = benefit_live_biomass_ER + benefit_wood_products_ER
-        
-        results.append({
-            'aoi_id': aoi_id,
-            'area': area,
-            'benefit_live_biomass_ER': benefit_live_biomass_ER,
-            'benefit_wood_products_ER': benefit_wood_products_ER,
-            'total_benefits': total_benefits
-        })
-        
-        if log_level == 'debug':
-            print(f"Subregion {aoi_id}:")
-            print(f"  Area: {area:.2f} ha")
-            print(f"  Years: {years}")
-            print(f"  Live biomass benefit: {benefit_live_biomass_ER:.2f} t CO2e")
-            print(f"  Wood products benefit: {benefit_wood_products_ER:.2f} t CO2e")
-            print(f"  Total benefits: {total_benefits:.2f} t CO2e")
-    
-    return results
-
-# Example usage
-json_file_path = 'IFM_final.json'
-scenario = 'intervention'
-
-results = calculate_extended_rotation_benefits(json_file_path, scenario, log_level='debug')
-
-if results:
-    total_benefits = sum(result['total_benefits'] for result in results)
-    print(f"\nTotal Extended Rotation Benefits: {total_benefits:.2f} t CO2e")
-else:
-    print("Failed to calculate Extended Rotation Benefits.")
-
 
 ### CONTINUE EDITING THE FUNCTION ABOVE AND ADJUST CALCULATE_ALL EQUATION BELOW!
 
