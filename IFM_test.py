@@ -10,6 +10,7 @@
 # Date Started: 07/14/2024
 # Last Edited: 09/26/2024
 # Purpose: AFOLU GHG Calculations for Improved Forest Management Interventions (Reduced-Impact Logging, Extended Rotation, Stop Logging, Fuelwood)
+# Purpose: AFOLU GHG Calculations for Improved Forest Management Interventions (Reduced-Impact Logging, Extended Rotation, Stop Logging, Fuelwood)
 # **********************************************************************************************************/
 
 #### Required Inputs ####
@@ -25,6 +26,7 @@
 #           -D: wood density (t d.m./m3)
 #           -VolExt = volume timber over bark extracted before project intervention (m3/ha)
 #           -AHA_perc (Annual Harvest Area): the percentage of the total area that is actually harvestd. In Json, 0.5.
+#           -AHA_perc (Annual Harvest Area): the percentage of the total area that is actually harvestd. In Json, 0.5.
 #           -C_timber: Proportion of total carbon extracted that resides in each wood product class 
 #                 -- (Roundwood: Tropical "0.55", Temperate "0.45", Boreal "0.42", Sawnwood: Tropical 0.58, Temperate 0.48, Boreal 0.44, Woodbase panels: Tropical 0.62, Temperate 0.52, Boreal 0.52)
 #           -prop_ox: Carbon emitted due to short-term oxidation of wood products "0.25" - the average across: Sawnwood 0.2; Woodbase panels 0.1; Other industrial roundwood 0.3; Paper and paperboard 0.4)
@@ -39,6 +41,7 @@
 #           -forest_type: forest type prior to intervention
 #           -D: wood density (t/m3)
 #           -VolExt = volume timber over bark extracted during project intervention (m3/ha)
+#           -AHA_perc (Annual Harvest Area): the percentage of the total area that is actually harvestd. In Json, 0.5.
 #           -AHA_perc (Annual Harvest Area): the percentage of the total area that is actually harvestd. In Json, 0.5.
 #           -C_timber: Proportion of total carbon extracted that resides in each wood product class 
 #                 -- (Roundwood: Tropical "0.55", Temperate "0.45", Boreal "0.42", Sawnwood: Tropical 0.58, Temperate 0.48, Boreal 0.44, Woodbase panels: Tropical 0.62, Temperate 0.52, Boreal 0.52)
