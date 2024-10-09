@@ -8,7 +8,9 @@
 # Filename: Forest_Protection_Deforestation_test.py
 # Author: Barbara Bomfim
 # Date Started: 07/11/2024
-# Last Edited: 09/26/2024
+
+# Last Edited: 09/29/2024
+
 # Purpose: AFOLU GHG Calculations for Forest Protection from Deforestation (FP) Interventions
 # **********************************************************************************************************/
 
@@ -34,7 +36,6 @@
 #           -fire_frequency = 5 years, 10 years
 #           -Bw = average AGB of land areas affected by disturbance (t dm/ha) is the same as the AGB from the GEDI. 
 #           -fd = fraction of biomass lost in disturbance (dimensionless; default 0.34 for fire))
-#           -deforested_for_fuelwood: Percentage of harvested wood used for fuelwood
 #           -illegal_logging_rate: volume timber over bark extracted illegally each year (m3 ha-1 yr-1)
 #           -Gw: average annual increment in AGB in natural regeneration (t dm/ha/yr) - IPCC Tables 3A.1.5 and 3A.1.6
 #  -Intervention requires:
@@ -64,7 +65,6 @@
 ##N2O
 # burning_n2o_ef: Emissions factor for N2O from burning (g N2O/kg dry matter burnt)
 # combustion_factor: combustion factor for fire
-# fuel_biomass: amount of biomass available for burning (t dry matter/ha)
 # FON: Amount of organic N applied annually (kg N/ha/yr)
 # EFDir: Emissions factor for direct N2O emissions from N inputs (kg N2O-N/kg N)
 # FRAC_GASM: Fraction of organic N that volatilizes (kg NH3-N + NOx-N)/kg N
@@ -834,9 +834,7 @@ def calculate_delta_cg(scenario, log_level='info'):
 
 #### STEP 5B: Avoided Fire Total Biomass CO2 Calculations #######
 
-## Estimate ∆CL using Equation 2.11: ∆CL = Lwood−removals + Lfuelwood + Ldisturbance
-# NOT NEEDED AS SCENARRIOS ARE DEFORESTATION, ILLEGAL LOGGING OR FIRE Lwood-removals = annual carbon loss due to wood removals, tonnes C yr-1 (Equation 2.12) 
-# NOT NEEDED AS SCENARRIOS ARE DEFORESTATION, ILLEGAL LOGGING OR FIRE Lfuelwood = annual biomass carbon loss due to fuelwood removals, tC/yr (Equation 2.13)
+## Estimate ∆CL using Equation 2.11: ∆CL = Ldisturbance
 # Ldisturbance = annual biomass carbon losses due to disturbances, tonnes C yr-1 (See Equation 2.14)
 
 ## Step 5B.1: Define equation to calculate fire disturabance impact using total_carbon_stock obtained in Step 3
@@ -1552,14 +1550,14 @@ def GHGcalc(aoi_id: str, df: pd.DataFrame, nx: int, intervention_subcategory: st
         biomass_co2 = biomass_co2_result.get(aoi_id, 0)  # Use 0 if aoi_id is not in the dictionary
         results_unc["totalC"].append(dSOC * 44/12 + biomass_co2)
 
-        # N2O emissions calculation
-        if "nutrient management" in intervention_subcategory:
-            FSN = (temp_int['n_fertilizer_amount'].values[0] * temp_int['n_fertilizer_percent'].values[0] / 100 -
-                   temp_bau['n_fertilizer_amount'].values[0] * temp_bau['n_fertilizer_percent'].values[0] / 100)
-            FON = (temp_int['org_amend_rate'].values[0] * temp_int['org_amend_npercent'].values[0] / 100 -
-                   temp_bau['org_amend_rate'].values[0] * temp_bau['org_amend_npercent'].values[0] / 100)
-        else:
-            FSN = FON = 0
+        # # N2O emissions calculation
+        # if "nutrient management" in intervention_subcategory:
+        #     FSN = (temp_int['n_fertilizer_amount'].values[0] * temp_int['n_fertilizer_percent'].values[0] / 100 -
+        #            temp_bau['n_fertilizer_amount'].values[0] * temp_bau['n_fertilizer_percent'].values[0] / 100)
+        #     FON = (temp_int['org_amend_rate'].values[0] * temp_int['org_amend_npercent'].values[0] / 100 -
+        #            temp_bau['org_amend_rate'].values[0] * temp_bau['org_amend_npercent'].values[0] / 100)
+        # else:
+        #     FSN = FON = 0
         
         FSOM = dSOC / 10 * 1000
         
@@ -1607,7 +1605,7 @@ def GHGcalc(aoi_id: str, df: pd.DataFrame, nx: int, intervention_subcategory: st
 
     return pd.DataFrame(results_unc)
   
-### Step 10.4: Define function to generate output
+### Step 10.4: Define function to generate output json file
 
 ## Define equation to generate output
 def generate_output(input_json: str):
