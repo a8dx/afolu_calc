@@ -9,7 +9,7 @@
     ],
     "business_as_usual": [
       {
-        "land_use_type": "Grassland",
+        "forest_type": "Conifer",
         "fire_used": "true",
         "FI": "1",
         "FI_error_negative": "0",
@@ -18,7 +18,6 @@
         "combustion_factor_sd": "0.16",
         "bio_ef": "1580",
         "years": "20",
-        "area_converted_yr": "100",
         "H": "0",
         "BCEFr": "0.5",
         "CF": "0.47",
@@ -99,9 +98,9 @@
 ],
     "intervention": [
       {
-        "land_use_type": "Natural",
+        "forest_type": "Conifer",
         "fire_used": "true",
-        "fire_management_years": "1",
+        "fire_management_years": "0",
         "FI": "1",
         "FI_error_negative": "0",
         "FI_error_positive": "0",
@@ -109,9 +108,6 @@
         "combustion_factor_sd": "0.16",
         "bio_ef": "1580",
         "years": "20",
-        "agb_month_after": "57.86",
-        "agb_before": "57.86",
-        "area_converted_yr": "100",
         "H": "0",
         "BCEFr": "0.5",
         "CF": "0.47",
