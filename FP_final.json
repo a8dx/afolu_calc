@@ -36,6 +36,7 @@
         "forest_area": "1000",
         "fire_incidence_rate": "0.1",
         "illegal_logging_rate": "2",
+        "Gw": "2.0",
         "Iv": "2.0",
         "BCEFi": "1.8",
         "community_offtake": "20",
@@ -66,8 +67,8 @@
               "FMG":"1.14",
               "FMG_error_negative":"-8",
               "FMG_error_positive":"8",
-              "ef_ch4":"58", ### JS:Doesn't appear in py script
-              "Nex":"0.47" ### JS:Doesn't appear in py script
+              "ef_ch4":"58",
+              "Nex":"0.47"
           },
           {
             "aoi_id": "tropicalmoist_ferralsols",
@@ -128,6 +129,7 @@
         "forest_area": "1000",
         "fire_incidence_rate": "0.05",
         "illegal_logging_rate": "1",
+        "Gw": "2.0",
         "Iv": "2.0",
         "BCEFi": "1.8",
         "community_offtake": "0",
