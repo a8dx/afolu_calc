@@ -9,7 +9,7 @@
 # Author: Barbara Bomfim
 # Date Started: 07/14/2024
 # Last Edited: 09/26/2024
-# Purpose: AFOLU GHG Calculations for Improved Forest Management Interventions (RIL, Extended Rotation, Stop Logging)
+# Purpose: AFOLU GHG Calculations for Improved Forest Management Interventions (Reduced-Impact Logging, Extended Rotation, Stop Logging, Fuelwood)
 # **********************************************************************************************************/
 
 #### Required Inputs ####
@@ -24,8 +24,7 @@
 #           -forest_type: forest type prior to intervention
 #           -D: wood density (t d.m./m3)
 #           -VolExt = volume timber over bark extracted before project intervention (m3/ha)
-#           -AHA (Annual Harvest Area): in ha - user input. 
-#               -- Will attribute a value in the JSON but will indicate this in the code.
+#           -AHA_perc (Annual Harvest Area): the percentage of the total area that is actually harvestd. In Json, 0.5.
 #           -C_timber: Proportion of total carbon extracted that resides in each wood product class 
 #                 -- (Roundwood: Tropical "0.55", Temperate "0.45", Boreal "0.42", Sawnwood: Tropical 0.58, Temperate 0.48, Boreal 0.44, Woodbase panels: Tropical 0.62, Temperate 0.52, Boreal 0.52)
 #           -prop_ox: Carbon emitted due to short-term oxidation of wood products "0.25" - the average across: Sawnwood 0.2; Woodbase panels 0.1; Other industrial roundwood 0.3; Paper and paperboard 0.4)
@@ -40,8 +39,7 @@
 #           -forest_type: forest type prior to intervention
 #           -D: wood density (t/m3)
 #           -VolExt = volume timber over bark extracted during project intervention (m3/ha)
-#           -AHA (Annual Harvest Area): in ha - user input. 
-#               -- Will attribute a value in the JSON but will indicate this in the code.
+#           -AHA_perc (Annual Harvest Area): the percentage of the total area that is actually harvestd. In Json, 0.5.
 #           -C_timber: Proportion of total carbon extracted that resides in each wood product class 
 #                 -- (Roundwood: Tropical "0.55", Temperate "0.45", Boreal "0.42", Sawnwood: Tropical 0.58, Temperate 0.48, Boreal 0.44, Woodbase panels: Tropical 0.62, Temperate 0.52, Boreal 0.52)
 #           -prop_ox: Carbon emitted due to short-term oxidation of wood products "0.25" - the average across: Sawnwood 0.2; Woodbase panels 0.1; Other industrial roundwood 0.3; Paper and paperboard 0.4)
@@ -232,9 +230,153 @@ def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
     
     return total_results
 
-##### REDUCED-IMPACTC LOGGING SUB-INTERVENTION #######
 
-### STEP 4: Annual CO2 Calculations for both Baseline and RIL intervention #########
+################ STEP 4 INTERVENTION CALCULATIONS #############################
+
+
+####### FUELWOOD CONSUMPTION SUB-INTERVENTION #######
+
+### Step 4.1-FW: 
+## Define Lfuelwood equation to estimate carbon loss due to fuelwood consumption ###
+def calculate_lfuelwood(scenario, log_level='info'):
+    """
+    Calculate Lfuelwood using the provided equation for each subregion.
+    Parameters:
+    scenario (str): Scenario in question
+    Returns:
+    list: Annual biomass carbon loss due to fuelwood removals in tCO2e/yr for each subregion.
+    """
+    global data
+    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
+    aoi_subregions = scenario_data.get("aoi_subregions", [])
+    
+    results = []
+    total_lfuelwood = 0
+    total_area = 0
+    
+    for subregion in aoi_subregions:
+        aoi_id = subregion["aoi_id"]
+        area = subregion["area"]
+        
+        FGtrees = scenario_data.get("FGtrees")
+        FGpart = scenario_data.get("FGpart")
+        BCEFr = scenario_data.get("BCEFr")
+        R = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
+        D = scenario_data.get("D")
+        CF = scenario_data.get("CF")
+        
+        if None in [FGtrees, FGpart, BCEFr, R, D, CF]:
+            if log_level == 'debug':
+                print(f"Missing data for calculating Lfuelwood in subregion {aoi_id}. Please check your data for scenario {scenario}.")
+            continue
+        
+        lfuelwood = ((FGtrees * BCEFr * (1 + R)) + FGpart * D) * CF * (44 / 12)
+        
+        results.append({
+            "aoi_id": aoi_id,
+            "area": area,
+            "lfuelwood": lfuelwood
+        })
+        
+        total_lfuelwood += lfuelwood
+        total_area += area
+        
+        if log_level == 'debug':
+            print(f"Subregion {aoi_id}:")
+            print(f"  Annual biomass carbon loss due to fuelwood removals: {lfuelwood:.2f} tCO2e/yr")
+            print(f"  Area: {area:.2f} ha")
+    
+    average_lfuelwood = total_lfuelwood / total_area if total_area > 0 else 0
+    
+    if log_level == 'debug':
+        print(f"\nTotal annual biomass carbon loss due to fuelwood removals across all subregions: {total_lfuelwood:.2f} tCO2e/yr")
+        print(f"Average annual biomass carbon loss due to fuelwood removals per hectare: {average_lfuelwood:.2f} tCO2e/ha/yr")
+    
+    return results
+
+### Step 4.2-FW: Calculate Difference between baseline and bau fuelwood consumption
+
+# Function to calculate fuelwood emissions for baseline and intervention scenarios
+def calculate_all(scenario, log_level='info'):
+    result = {}
+    
+    try:
+        check_global_variables()
+        
+        steps = [
+            ('average_agbd_tco2e', lambda: mean_annual_agc_stock(scenario=scenario, log_level=log_level)),
+            ('mean_annual_tot_c_stock', lambda: mean_annual_tot_c_stock(result['average_agbd_tco2e'], scenario=scenario, log_level=log_level)),
+            ('lfuelwood', lambda: calculate_lfuelwood(scenario=scenario, log_level=log_level)),
+        ]
+        
+        for key, func in steps:
+            try:
+                result[key] = func()
+                if log_level == 'debug':
+                    print(f"Calculated {key} successfully")
+            except Exception as step_error:
+                print(f"Error calculating {key} for scenario {scenario}: {str(step_error)}")
+                result[f"{key}_error"] = str(step_error)
+        
+    except Exception as e:
+        print(f"Unexpected error in calculate_all for scenario {scenario}: {str(e)}")
+        result["unexpected_error"] = str(e)
+    
+    return result
+
+## Next calculations to get difference between bau and int
+biomass = {
+    "business_as_usual": calculate_all(scenario="business_as_usual"),
+    "intervention": calculate_all(scenario="intervention")
+}
+
+biomass_co2_result = {}
+biomass_co2_sd = {}
+biomass_co2_result_error_positive = 10  # this is a percentage
+
+def get_annual_change(scenario_result):
+    if 'lfuelwood' in scenario_result:
+        return scenario_result['lfuelwood']
+    else:
+        print(f"Warning: 'lfuelwood' not found in {scenario_result.get('scenario', 'unknown')} scenario.")
+        return []
+
+intervention_changes = get_annual_change(biomass["intervention"])
+bau_changes = get_annual_change(biomass["business_as_usual"])
+
+for inter_item, bau_item in zip(intervention_changes, bau_changes):
+    if not (isinstance(inter_item, dict) and isinstance(bau_item, dict)):
+        print(f"Warning: Invalid item format. Skipping. Inter: {inter_item}, BAU: {bau_item}")
+        continue
+
+    if 'aoi_id' not in inter_item or 'aoi_id' not in bau_item:
+        print(f"Warning: Missing aoi_id. Skipping. Inter: {inter_item}, BAU: {bau_item}")
+        continue
+
+    if inter_item['aoi_id'] != bau_item['aoi_id']:
+        raise ValueError(f"Mismatched aoi_ids: {inter_item['aoi_id']} and {bau_item['aoi_id']}")
+    
+    aoi_id = inter_item['aoi_id']
+    
+    if 'annual_change' not in inter_item or 'annual_change' not in bau_item:
+        print(f"Warning: Missing annual_change for aoi_id {aoi_id}. Skipping.")
+        continue
+
+    difference_fuelwood = inter_item['annual_change'] - bau_item['annual_change']
+    
+    biomass_co2_result[aoi_id] = difference_fuelwood
+    biomass_co2_sd[aoi_id] = (abs(difference_fuelwood) * biomass_co2_result_error_positive / 100) / 1.96
+
+print("Biomass CO2 Result Fuelwood:", biomass_co2_result)
+print("Biomass CO2 Standard Deviation Fuelwood:", biomass_co2_sd)
+
+
+
+
+######### REDUCED-IMPACT LOGGING (RIL) SUB-INTERVENTION ##########
+
+
+### STEP 4-RIL: Annual CO2 Calculations for both Baseline and RIL intervention #########
 
 ## Equations:
 # Logging emissions - baseline and RIL same equations
@@ -254,12 +396,13 @@ def calculate_logging_emissions(scenario, log_level='info'):
         aoi_id = subregion["aoi_id"]
         area = subregion["area"]
         
-        AHA = float(scenario_data.get("AHA", 0)) # this should be user input, as mentioned in User Input commented part of python code
+        AHA_perc = float(scenario_data.get("AHA_perc", 0)) # this should be user input, as mentioned in User Input commented part of python code
         VolExt = float(scenario_data.get("VolExt", 0))
         D = float(scenario_data.get("D", 0))
         ElE_factor_1 = float(scenario_data.get("ElE_factor_1", 0))
         ElE_factor_2 = float(scenario_data.get("ElE_factor_2", 0))
         
+        AHA = area * AHA_perc ## edited this here to accomodate suggestion
         ELE = (ElE_factor_1 * D) - ElE_factor_2
         TimberTree = (AHA * VolExt * ELE)
         
@@ -320,7 +463,6 @@ def calculate_logging_emissions(scenario, log_level='info'):
 #     return total_results
 
 ### edited code
-
 def calculate_carbon_wood_products(scenario, log_level='info'):
 
     global data
@@ -414,11 +556,12 @@ def calculate_logging_infrastructure(scenario, log_level='info'):
         aoi_id = subregion["aoi_id"]
         area = subregion["area"]
         
-        AHA = float(scenario_data.get("AHA", 0)) # this should be user input, as mentioned in User Input commented part of python code
+        AHA_perc = float(scenario_data.get("AHA_perc", 0)) # this should be user input, as mentioned in User Input commented part of python code
         VolExt = float(scenario_data.get("VolExt", 0))
         SkidsFactor = float(scenario_data.get("SkidsFactor", 0))
         RoadsDecksFactor = float(scenario_data.get("RoadsDecksFactor", 0))
         
+        AHA = AHA_perc * area ## edited this to accomodate suggetion
         Skids = SkidsFactor * AHA * VolExt
         RoadsDeck = RoadsDecksFactor * AHA * VolExt
         LoggingInfrastructure = Skids + RoadsDeck
@@ -441,64 +584,6 @@ def calculate_logging_infrastructure(scenario, log_level='info'):
     
     return total_results
 
-### Estimate carbon loss due to fuelwood consumption ###
-## Step 4.5-RIL: Define Lfuelwood equation
-def calculate_lfuelwood(scenario, log_level='info'):
-    """
-    Calculate Lfuelwood using the provided equation for each subregion.
-    Parameters:
-    scenario (str): Scenario in question
-    Returns:
-    list: Annual biomass carbon loss due to fuelwood removals in tCO2e/yr for each subregion.
-    """
-    global data
-    scenario_data = data.get("scenarios", {}).get(scenario, [{}])[0]
-    aoi_subregions = scenario_data.get("aoi_subregions", [])
-    
-    results = []
-    total_lfuelwood = 0
-    total_area = 0
-    
-    for subregion in aoi_subregions:
-        aoi_id = subregion["aoi_id"]
-        area = subregion["area"]
-        
-        FGtrees = scenario_data.get("FGtrees")
-        FGpart = scenario_data.get("FGpart")
-        BCEFr = scenario_data.get("BCEFr")
-        ratio = scenario_data.get("ratio_below_ground_biomass_to_above_ground_biomass")
-        D = scenario_data.get("D")
-        CF = scenario_data.get("CF")
-        
-        if None in [FGtrees, FGpart, BCEFr, ratio, D, CF]:
-            if log_level == 'debug':
-                print(f"Missing data for calculating Lfuelwood in subregion {aoi_id}. Please check your data for scenario {scenario}.")
-            continue
-        
-        lfuelwood = ((FGtrees * BCEFr * (1 + ratio)) + FGpart * D) * CF * (44 / 12) * (area / scenario_data.get("area_converted_yr", 1))
-        
-        results.append({
-            "aoi_id": aoi_id,
-            "area": area,
-            "lfuelwood": lfuelwood
-        })
-        
-        total_lfuelwood += lfuelwood
-        total_area += area
-        
-        if log_level == 'debug':
-            print(f"Subregion {aoi_id}:")
-            print(f"  Annual biomass carbon loss due to fuelwood removals: {lfuelwood:.2f} tCO2e/yr")
-            print(f"  Area: {area:.2f} ha")
-    
-    average_lfuelwood = total_lfuelwood / total_area if total_area > 0 else 0
-    
-    if log_level == 'debug':
-        print(f"\nTotal annual biomass carbon loss due to fuelwood removals across all subregions: {total_lfuelwood:.2f} tCO2e/yr")
-        print(f"Average annual biomass carbon loss due to fuelwood removals per hectare: {average_lfuelwood:.2f} tCO2e/ha/yr")
-    
-    return results
-
 ## Step 4.6-RIL: Estimate Total Logging Emissions
 def calculate_total_logging_emissions(scenario, log_level='info'):
     global data
@@ -510,8 +595,7 @@ def calculate_total_logging_emissions(scenario, log_level='info'):
     wood_products_results = calculate_carbon_wood_products(scenario, log_level)
     incidental_damage_results = calculate_incidental_damage(scenario, log_level)
     logging_infrastructure_results = calculate_logging_infrastructure(scenario, log_level)
-    fuelwood_results = calculate_lfuelwood(scenario, log_level)
-    
+
     total_results = []
     
     for subregion in aoi_subregions:
@@ -522,9 +606,8 @@ def calculate_total_logging_emissions(scenario, log_level='info'):
         wood_products = next(item for item in wood_products_results if item["aoi_id"] == aoi_id)["WoodProducts"]
         incidental_damage = next(item for item in incidental_damage_results if item["aoi_id"] == aoi_id)["IncidentalDamage"]
         logging_infrastructure = next(item for item in logging_infrastructure_results if item["aoi_id"] == aoi_id)["LoggingInfrastructure"]
-        fuelwood_emissions = next(item for item in fuelwood_results if item["aoi_id"] == aoi_id)["average_lfuelwood"]
-        
-        Logging_Emissions = ((timber_tree - wood_products) + incidental_damage + logging_infrastructure + fuelwood_emissions) * (44 / 12)
+
+        Logging_Emissions = ((timber_tree - wood_products) + incidental_damage + logging_infrastructure) * (44 / 12)
         
         total_results.append({
             "aoi_id": aoi_id,
@@ -542,20 +625,34 @@ def calculate_total_logging_emissions(scenario, log_level='info'):
 
 ### Step 5-RIL: Calculate RIL variables ####
 ## Calculate bau and intervention scenarios and difference between both
-
 def calculate_all(scenario, log_level='info'):
     result = {}
     
-    average_agbd_tco2e = mean_annual_agc_stock(scenario=scenario, log_level=log_level)
-    result["average_agbd_tco2e"] = average_agbd_tco2e
-    
-    mean_annual_tot_c_stock_result = mean_annual_tot_c_stock(average_agbd_tco2e, scenario=scenario, log_level=log_level)
-    result["mean_annual_tot_c_stock"] = mean_annual_tot_c_stock_result
-    
-    logging_emissions = calculate_total_logging_emissions(scenario=scenario, log_level=log_level)
-    result["Logging_Emissions"] = logging_emissions
+    try:
+        check_global_variables()
+        
+        steps = [
+            ('average_agbd_tco2e', lambda: mean_annual_agc_stock(scenario=scenario, log_level=log_level)),
+            ('mean_annual_tot_c_stock', lambda: mean_annual_tot_c_stock(result['average_agbd_tco2e'], scenario=scenario, log_level=log_level)),
+            ('logging_emissions', lambda: calculate_total_logging_emissions(scenario=scenario, years=20, average_agbd_tco2e=result['average_agbd_tco2e'], log_level=log_level)),
+        ]
+        
+        for key, func in steps:
+            try:
+                result[key] = func()
+                if log_level == 'debug':
+                    print(f"Calculated {key} successfully")
+            except Exception as step_error:
+                print(f"Error calculating {key} for scenario {scenario}: {str(step_error)}")
+                result[f"{key}_error"] = str(step_error)
+        
+    except Exception as e:
+        print(f"Unexpected error in calculate_all for scenario {scenario}: {str(e)}")
+        result["unexpected_error"] = str(e)
     
     return result
+
+#### Step 9: Calculate bau and intervention scenarios and difference between both
 
 biomass = {
     "business_as_usual": calculate_all(scenario="business_as_usual"),
@@ -567,10 +664,10 @@ biomass_co2_sd = {}
 biomass_co2_result_error_positive = 10  # this is a percentage
 
 def get_annual_change(scenario_result):
-    if 'Logging_Emissions' in scenario_result:
-        return scenario_result['Logging_Emissions']
+    if 'logging_emissions' in scenario_result:
+        return scenario_result['logging_emissions']
     else:
-        print(f"Warning: 'Logging_Emissions' not found in {scenario_result.get('scenario', 'unknown')} scenario.")
+        print(f"Warning: 'logging_emissions' not found in {scenario_result.get('scenario', 'unknown')} scenario.")
         return []
 
 intervention_changes = get_annual_change(biomass["intervention"])
@@ -584,23 +681,23 @@ for inter_item, bau_item in zip(intervention_changes, bau_changes):
     if 'aoi_id' not in inter_item or 'aoi_id' not in bau_item:
         print(f"Warning: Missing aoi_id. Skipping. Inter: {inter_item}, BAU: {bau_item}")
         continue
+
     if inter_item['aoi_id'] != bau_item['aoi_id']:
         raise ValueError(f"Mismatched aoi_ids: {inter_item['aoi_id']} and {bau_item['aoi_id']}")
     
     aoi_id = inter_item['aoi_id']
     
-    if 'Logging_Emissions' not in inter_item or 'Logging_Emissions' not in bau_item:
-        print(f"Warning: Missing Logging_Emissions for aoi_id {aoi_id}. Skipping.")
+    if 'annual_change' not in inter_item or 'annual_change' not in bau_item:
+        print(f"Warning: Missing logging_emissions for aoi_id {aoi_id}. Skipping.")
         continue
 
-    difference = inter_item['Logging_Emissions'] - bau_item['Logging_Emissions']
+    difference_RIL = inter_item['annual_change'] - bau_item['annual_change']
     
-    biomass_co2_result[aoi_id] = difference
-    biomass_co2_sd[aoi_id] = (abs(difference) * biomass_co2_result_error_positive / 100) / 1.96
+    biomass_co2_result[aoi_id] = difference_RIL
+    biomass_co2_sd[aoi_id] = (abs(difference_RIL) * biomass_co2_result_error_positive / 100) / 1.96
 
-#This is the difference between the intervention and the baseline emissions.
-print("Biomass CO2 Result:", biomass_co2_result)
-print("Biomass CO2 Standard Deviation:", biomass_co2_sd)
+print("Biomass CO2 Result RIL:", biomass_co2_result)
+print("Biomass CO2 Standard Deviation RIL:", biomass_co2_sd)
 
 ## To Mathematica Team: Check why output is like this:
 # print("Biomass CO2 Result:", biomass_co2_result)
@@ -609,10 +706,12 @@ print("Biomass CO2 Standard Deviation:", biomass_co2_sd)
 # Biomass CO2 Standard Deviation: {'tropicalmoist_acrisols': 358.6839965986392, 'tropicalmoist_ferralsols': 358.6839965986392}
 
 
-####### EXTENDED ROTATION INTERVENTION ##########
+####### EXTENDED ROTATION SUB-INTERVENTION ##########
+
+
 ## Defining equations for use if Extended Rotation is the selected sub-intervention
 
-## Step 1-ER: Define equation to calculate baseline total tree carbon stock
+## Step 4.1-ER: Define equation to calculate baseline total tree carbon stock
 def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
     global data
     
@@ -643,9 +742,7 @@ def mean_annual_tot_c_stock(subregion_results, scenario, log_level='info'):
     
     return total_results
   
-## Step 2-ER: Define equation to calculate wood product carbon stock
-
-## TO CHECK: ConvEff is not well referenced. Need to check IPCC guidelines.
+## Step 4.2-ER: Define equation to calculate wood product carbon stock
 def calculate_wood_products_c_stock(scenario, t=None, log_level='info'):
     global data
     
@@ -659,7 +756,7 @@ def calculate_wood_products_c_stock(scenario, t=None, log_level='info'):
         area = subregion["area"]
         average_agbd_tco2e = subregion["carbon_stock"]
         BEF = float(scenario_data.get("BEF", 0)) # Biomass expansion factor for wood removal - BEF2 from table 3A.1.10
-        ConvEff = 0.5 # to check: milling conversion efficiency (ConvEff)
+        ConvEff = 0.5 # milling conversion efficiency (ConvEff)
         
         WPBL0 = average_agbd_tco2e / BEF * ConvEff
         
@@ -686,7 +783,7 @@ def calculate_wood_products_c_stock(scenario, t=None, log_level='info'):
     
     return total_results
 
-### Step 3-ER: Define equation to calculate emissions from Conventional Logging as following:
+### Step 4.3-ER: Define equation to calculate emissions from Conventional Logging as following:
 ## Emissions (t CO2e) = Harvest area * (result from Step 1 + result from Step 2)
 def calculate_conventional_logging_emissions(scenario, log_level='info'):
     global data
@@ -733,9 +830,9 @@ def calculate_conventional_logging_emissions(scenario, log_level='info'):
     
     return emissions_results
 
-##### Step 4-ER: Define equations to calculate ER GHG impact ###
+##### Step 4.4-ER: Define equations to calculate ER GHG impact ###
 
-## Step 4.1: Define equation to calculate difference in years between BAU and ER rotation length
+## Step 4.4.1: Define equation to calculate difference in years between BAU and ER rotation length
 def calculate_ery(json_file_path):
     try:
         # Load JSON data
