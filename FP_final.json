@@ -9,7 +9,7 @@
     ],
     "business_as_usual": [
       {
-        "land_use_type": "Grassland",
+        "forest_type": "Conifer",
         "fire_used": "true",
         "FI": "1",
         "FI_error_negative": "0",
@@ -18,7 +18,6 @@
         "combustion_factor_sd": "0.16",
         "bio_ef": "1580",
         "years": "20",
-        "area_converted_yr": "100",
         "H": "0",
         "BCEFr": "0.5",
         "CF": "0.47",
@@ -36,6 +35,7 @@
         "forest_area": "1000",
         "fire_incidence_rate": "0.1",
         "illegal_logging_rate": "2",
+        "Gw": "2.0",
         "Iv": "2.0",
         "BCEFi": "1.8",
         "community_offtake": "20",
@@ -66,8 +66,8 @@
               "FMG":"1.14",
               "FMG_error_negative":"-8",
               "FMG_error_positive":"8",
-              "ef_ch4":"58", ### JS:Doesn't appear in py script
-              "Nex":"0.47" ### JS:Doesn't appear in py script
+              "ef_ch4":"58",
+              "Nex":"0.47"
           },
           {
             "aoi_id": "tropicalmoist_ferralsols",
@@ -98,9 +98,9 @@
 ],
     "intervention": [
       {
-        "land_use_type": "Natural",
+        "forest_type": "Conifer",
         "fire_used": "true",
-        "fire_management_years": "1",
+        "fire_management_years": "0",
         "FI": "1",
         "FI_error_negative": "0",
         "FI_error_positive": "0",
@@ -108,9 +108,6 @@
         "combustion_factor_sd": "0.16",
         "bio_ef": "1580",
         "years": "20",
-        "agb_month_after": "57.86",
-        "agb_before": "57.86",
-        "area_converted_yr": "100",
         "H": "0",
         "BCEFr": "0.5",
         "CF": "0.47",
@@ -128,6 +125,7 @@
         "forest_area": "1000",
         "fire_incidence_rate": "0.05",
         "illegal_logging_rate": "1",
+        "Gw": "2.0",
         "Iv": "2.0",
         "BCEFi": "1.8",
         "community_offtake": "0",
